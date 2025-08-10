@@ -6,10 +6,10 @@ const active: React.CSSProperties = { background: "#efefef", fontWeight: 600 };
 export default function Nav() {
   return (
     <nav style={{ display: "grid", gap: 8 }}>
-      <NavLink to="/dashboard" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>´ë½Ãº¸µå</NavLink>
-      <NavLink to="/tasks" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>ÇÒÀÏ(Äù½ºÆ®)</NavLink>
-      <NavLink to="/habits" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>½À°ü</NavLink>
-      <NavLink to="/settings" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>¼³Á¤</NavLink>
+      <NavLink to="/dashboard" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>ëŒ€ì‹œë³´ë“œ</NavLink>
+      <NavLink to="/tasks" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>í• ì¼(í€˜ìŠ¤íŠ¸)</NavLink>
+      <NavLink to="/habits" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>ìŠµê´€</NavLink>
+      <NavLink to="/settings" style={({ isActive }) => ({ ...linkStyle, ...(isActive ? active : {}) })}>ì„¤ì •</NavLink>
     </nav>
   );
 }
