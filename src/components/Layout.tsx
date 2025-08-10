@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import Nav from "./Nav";
 
 export default function Layout({ children }: { children: ReactNode }) {
