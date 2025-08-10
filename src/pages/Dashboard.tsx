@@ -1,8 +1,8 @@
 export default function Dashboard() {
   return (
     <section>
-      <h2>´ë½Ãº¸µå</h2>
-      <p>ÀÌ¹ø ÁÖ ÁøÇà »óÈ², ¿À´ÃÀÇ Äù½ºÆ®, ½À°ü ¸®Æ÷Æ® µîÀ» ¿ä¾àÇØ¼­ º¸¿©ÁÙ ¿¹Á¤ÀÔ´Ï´Ù.</p>
+      <h2>ëŒ€ì‹œë³´ë“œ</h2>
+      <p>ì´ë²ˆ ì£¼ ì§„í–‰ ìƒí™©, ì˜¤ëŠ˜ì˜ í€˜ìŠ¤íŠ¸, ìŠµê´€ ë¦¬í¬íŠ¸ ë“±ì„ ìš”ì•½í•´ì„œ ë³´ì—¬ì¤„ ì˜ˆì •ìž…ë‹ˆë‹¤.</p>
     </section>
   );
 }
