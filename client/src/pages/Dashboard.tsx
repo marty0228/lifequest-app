@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Task } from "../types";
 import { loadTasks, saveTasks } from "../utils/storage";
+import ServerCheck from "../components/ServerCheck";
 
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(() => loadTasks<Task>());
@@ -61,6 +62,9 @@ export default function Dashboard() {
           <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: "#6366f1", transition: "width .2s" }} />
         </div>
         <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>{progress}%</div>
+        <div style={{ marginTop: 12 }}>
+          <ServerCheck />
+        </div>
       </header>
 
       {overdue.length > 0 && (
