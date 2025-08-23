@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Task } from "../types";
 import { loadTasks, saveTasks } from "../utils/storage";
-import ServerCheck from "../components/ServerCheck";
+
+// ✅ 추가: 로그인 상태/패널
+import { useAuth } from "../hooks/useAuth";
+import AuthPanel from "../components/AuthPanel";
 
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(() => loadTasks<Task>());
+
+  // ✅ 추가: 로그인 상태
+  const { user, loading } = useAuth();
 
   // 멀티탭이나 다른 페이지(Tasks)에서 변경된 것 반영
   useEffect(() => {
@@ -50,21 +56,52 @@ export default function Dashboard() {
     });
   }
 
+  // ✅ 추가: 로딩 중 처리(선택)
+  if (loading) {
+    return (
+      <section style={{ display: "grid", gap: 16 }}>
+        <header style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <h2 style={{ marginBottom: 8 }}>대시보드</h2>
+          <p style={{ color: "#6b7280" }}>로그인 상태 확인 중…</p>
+        </header>
+      </section>
+    );
+  }
+
+  // ✅ 추가: 로그인 안 된 경우 → 로그인 패널만 보여주고 나머지 숨김
+  if (!user) {
+    return (
+      <section style={{ display: "grid", gap: 16 }}>
+        <header style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <h2 style={{ marginBottom: 8 }}>대시보드</h2>
+          <p style={{ color: "#6b7280" }}>로그인 후 퀘스트를 사용할 수 있어요.</p>
+          <AuthPanel />
+        </header>
+      </section>
+    );
+  }
+
+  // ✅ 로그인된 경우: 기존 대시보드 전체 출력
   return (
     <section style={{ display: "grid", gap: 16 }}>
       <header style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 12 }}>
         <h2 style={{ marginBottom: 8 }}>대시보드</h2>
         <p style={{ color: "#6b7280" }}>
-          오늘({todayStr}) 진행 요약 · 오늘 할 일 {totalToday}개 중 {completedToday.length}개 완료
+          {user.email}님, 환영합니다! 오늘({todayStr}) 진행 요약 · 오늘 할 일 {totalToday}개 중 {completedToday.length}개 완료
         </p>
         {/* 진행률 바 */}
         <div style={{ marginTop: 10, height: 8, background: "#f3f4f6", borderRadius: 999 }}>
-          <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: "#6366f1", transition: "width .2s" }} />
+          <div
+            style={{
+              width: `${progress}%`,
+              height: "100%",
+              borderRadius: 999,
+              background: "#6366f1",
+              transition: "width .2s",
+            }}
+          />
         </div>
         <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>{progress}%</div>
-        <div style={{ marginTop: 12 }}>
-          <ServerCheck />
-        </div>
       </header>
 
       {overdue.length > 0 && (
