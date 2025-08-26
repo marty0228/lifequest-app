@@ -57,35 +57,31 @@ export default function Dashboard() {
     try {
       const updated = await toggleTaskDb(id);
       setTasks(prev => prev.map(t => (t.id === id ? updated : t)));
-    } catch (e) {
-      console.error(e);
-      alert("체크 변경 실패");
+    } catch (e: any) {
+      console.error("토글 에러:", e);
+      alert("체크 변경 실패: " + (e?.message ?? JSON.stringify(e)));
     }
   }
 
-  // 간단 추가 폼 (원하면 숨겨도 됨)
+  // 간단 추가 폼
   async function onAdd(e: React.FormEvent<HTMLFormElement>) {
-  e.preventDefault();
-  if (!user) return;
+    e.preventDefault();
+    if (!user) return;
+    const form = e.currentTarget as HTMLFormElement; // await 전에 확보
+    const fd = new FormData(form);
+    const title = (fd.get("title") as string)?.trim();
+    const due = (fd.get("due") as string) || undefined;
+    if (!title) return;
 
-  // ✅ 먼저 폼 엘리먼트를 잡아둠 (await 전에!)
-  const form = e.currentTarget as HTMLFormElement;
-  const fd = new FormData(form);
-  const title = (fd.get("title") as string)?.trim();
-  const due = (fd.get("due") as string) || undefined;
-  if (!title) return;
-
-  try {
-    const row = await addTask(user.id, title, due);
-    setTasks(prev => [row, ...prev]);
-
-    // ✅ 이벤트 객체 대신, 위에서 잡아둔 form으로 reset
-    form.reset();
-  } catch (err: any) {
-    console.error("추가 에러:", err);
-    alert("추가 실패: " + (err?.message ?? JSON.stringify(err)));
+    try {
+      const row = await addTask(user.id, title, due);
+      setTasks(prev => [row, ...prev]); // 화면 즉시 반영
+      form.reset();
+    } catch (err: any) {
+      console.error("추가 에러:", err);
+      alert("추가 실패: " + (err?.message ?? JSON.stringify(err)));
+    }
   }
-}
 
   // 로딩 중
   if (loading) {
@@ -112,7 +108,7 @@ export default function Dashboard() {
     );
   }
 
-  // 로그인 상태 → 기존 화면 + 추가 폼
+  // 로그인 상태 → 화면
   return (
     <section style={{ display: "grid", gap: 16 }}>
       <header style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 12 }}>
@@ -127,7 +123,7 @@ export default function Dashboard() {
         </div>
         <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>{progress}%</div>
 
-        {/* 간단 추가 폼 */}
+        {/* 추가 폼 */}
         <form onSubmit={onAdd} style={{ marginTop: 12, display: "flex", gap: 8 }}>
           <input name="title" placeholder="새 퀘스트" />
           <input name="due" type="date" />
@@ -135,6 +131,16 @@ export default function Dashboard() {
         </form>
       </header>
 
+      {/* 📋 전체 퀘스트 (날짜 상관없이 전부) */}
+      <Section title="📋 전체 퀘스트">
+        {tasks.length === 0 ? (
+          <Empty text="퀘스트가 아직 없어요" />
+        ) : (
+          tasks.map(t => <TaskRow key={t.id} t={t} onToggle={toggle} />)
+        )}
+      </Section>
+
+      {/* ⚠ 마감 지남 */}
       {overdue.length > 0 && (
         <Section title="⚠ 마감 지남" hint="가능한 빨리 처리하세요">
           {overdue.map(t => (
@@ -143,6 +149,7 @@ export default function Dashboard() {
         </Section>
       )}
 
+      {/* 오늘의 퀘스트 */}
       <Section title="오늘의 퀘스트">
         {today.length === 0 ? (
           <Empty text={totalToday === 0 ? "오늘 할 일이 없어요 🎉" : "모든 오늘 할 일을 끝냈어요 ✅"} />
@@ -151,6 +158,7 @@ export default function Dashboard() {
         )}
       </Section>
 
+      {/* 오늘 완료한 항목 */}
       {completedToday.length > 0 && (
         <Section title="오늘 완료한 항목">
           {completedToday.map(t => (
