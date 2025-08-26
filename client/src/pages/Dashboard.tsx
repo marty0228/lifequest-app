@@ -1,32 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Task } from "../types";
-import { loadTasks, saveTasks } from "../utils/storage";
 
-// ✅ 추가: 로그인 상태/패널
+// Supabase 연동
 import { useAuth } from "../hooks/useAuth";
+import { fetchTasks, addTask, toggleTask as toggleTaskDb } from "../utils/tasksDb";
 import AuthPanel from "../components/AuthPanel";
 
 export default function Dashboard() {
-  const [tasks, setTasks] = useState<Task[]>(() => loadTasks<Task>());
-
-  // ✅ 추가: 로그인 상태
   const { user, loading } = useAuth();
-
-  // 멀티탭이나 다른 페이지(Tasks)에서 변경된 것 반영
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "lifequest.tasks") {
-        setTasks(loadTasks<Task>());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
+  const [tasks, setTasks] = useState<Task[]>([]);
   const todayStr = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
 
-  // 분류
-  const { today, overdue, completedToday } = useMemo(() => {
+  // 로그인 후 DB에서 목록 로드
+  useEffect(() => {
+    if (!user) {
+      setTasks([]);
+      return;
+    }
+    (async () => {
+      try {
+        const rows = await fetchTasks(user.id);
+        setTasks(rows);
+      } catch (e) {
+        console.error(e);
+        alert("작업 목록을 불러오지 못했습니다.");
+      }
+    })();
+  }, [user]);
+
+  // 분류/진행률 계산
+  const { today, overdue, completedToday, totalToday, progress } = useMemo(() => {
     const t: Task[] = [];
     const o: Task[] = [];
     const c: Task[] = [];
@@ -40,23 +43,45 @@ export default function Dashboard() {
       else if (isToday && !it.completed) t.push(it);
       else if (isToday && it.completed) c.push(it);
     }
-    // 최신 생성순 정렬
     const sortDesc = (a: Task, b: Task) => b.createdAt.localeCompare(a.createdAt);
-    return { today: t.sort(sortDesc), overdue: o.sort(sortDesc), completedToday: c.sort(sortDesc) };
+    const t2 = t.sort(sortDesc);
+    const o2 = o.sort(sortDesc);
+    const c2 = c.sort(sortDesc);
+    const total = t2.length + c2.length;
+    const prog = total === 0 ? 0 : Math.round((c2.length / total) * 100);
+    return { today: t2, overdue: o2, completedToday: c2, totalToday: total, progress: prog };
   }, [tasks, todayStr]);
 
-  const totalToday = today.length + completedToday.length;
-  const progress = totalToday === 0 ? 0 : Math.round((completedToday.length / totalToday) * 100);
-
-  function toggle(id: string) {
-    setTasks(prev => {
-      const next = prev.map(t => (t.id === id ? { ...t, completed: !t.completed } : t));
-      saveTasks(next);
-      return next;
-    });
+  // 완료 토글 → DB 업데이트 후 상태 반영
+  async function toggle(id: string) {
+    try {
+      const updated = await toggleTaskDb(id);
+      setTasks(prev => prev.map(t => (t.id === id ? updated : t)));
+    } catch (e) {
+      console.error(e);
+      alert("체크 변경 실패");
+    }
   }
 
-  // ✅ 추가: 로딩 중 처리(선택)
+  // 간단 추가 폼 (원하면 숨겨도 됨)
+  async function onAdd(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!user) return;
+    const fd = new FormData(e.currentTarget);
+    const title = (fd.get("title") as string)?.trim();
+    const due = (fd.get("due") as string) || undefined;
+    if (!title) return;
+    try {
+      const row = await addTask(user.id, title, due);
+      setTasks(prev => [row, ...prev]);
+      e.currentTarget.reset();
+    } catch (err) {
+      console.error(err);
+      alert("추가 실패");
+    }
+  }
+
+  // 로딩 중
   if (loading) {
     return (
       <section style={{ display: "grid", gap: 16 }}>
@@ -68,7 +93,7 @@ export default function Dashboard() {
     );
   }
 
-  // ✅ 추가: 로그인 안 된 경우 → 로그인 패널만 보여주고 나머지 숨김
+  // 비로그인 → 로그인 패널만 노출
   if (!user) {
     return (
       <section style={{ display: "grid", gap: 16 }}>
@@ -81,7 +106,7 @@ export default function Dashboard() {
     );
   }
 
-  // ✅ 로그인된 경우: 기존 대시보드 전체 출력
+  // 로그인 상태 → 기존 화면 + 추가 폼
   return (
     <section style={{ display: "grid", gap: 16 }}>
       <header style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 12 }}>
@@ -89,19 +114,19 @@ export default function Dashboard() {
         <p style={{ color: "#6b7280" }}>
           {user.email}님, 환영합니다! 오늘({todayStr}) 진행 요약 · 오늘 할 일 {totalToday}개 중 {completedToday.length}개 완료
         </p>
+
         {/* 진행률 바 */}
         <div style={{ marginTop: 10, height: 8, background: "#f3f4f6", borderRadius: 999 }}>
-          <div
-            style={{
-              width: `${progress}%`,
-              height: "100%",
-              borderRadius: 999,
-              background: "#6366f1",
-              transition: "width .2s",
-            }}
-          />
+          <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: "#6366f1", transition: "width .2s" }} />
         </div>
         <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>{progress}%</div>
+
+        {/* 간단 추가 폼 */}
+        <form onSubmit={onAdd} style={{ marginTop: 12, display: "flex", gap: 8 }}>
+          <input name="title" placeholder="새 퀘스트" />
+          <input name="due" type="date" />
+          <button type="submit">추가</button>
+        </form>
       </header>
 
       {overdue.length > 0 && (
