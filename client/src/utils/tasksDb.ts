@@ -1,12 +1,14 @@
+// client/src/utils/tasksDb.ts
 import { supabase } from "./supabase";
 import type { Task } from "../types";
 
+// DB Row → 프론트 Task 매핑
 const map = (r: any): Task => ({
   id: r.id,
   title: r.title,
   completed: r.completed,
-  createdAt: r.created_at,
-  dueDate: r.due_date ?? undefined,
+  createdAt: r.created_at,      // DB: created_at → FE: createdAt
+  dueDate: r.due_date ?? undefined, // DB: due_date → FE: dueDate
 });
 
 export async function fetchTasks(userId: string): Promise<Task[]> {
@@ -20,9 +22,12 @@ export async function fetchTasks(userId: string): Promise<Task[]> {
 }
 
 export async function addTask(userId: string, title: string, dueDate?: string) {
+  const payload: any = { user_id: userId, title };
+  if (dueDate) payload.due_date = dueDate; // yyyy-mm-dd 문자열 OK
+
   const { data, error } = await supabase
     .from("quests")
-    .insert({ user_id: userId, title, due_date: dueDate })
+    .insert(payload)
     .select()
     .single();
   if (error) throw error;
@@ -30,6 +35,7 @@ export async function addTask(userId: string, title: string, dueDate?: string) {
 }
 
 export async function toggleTask(id: string) {
+  // 현재 completed 값 조회 후 반전
   const { data: cur, error: e1 } = await supabase
     .from("quests")
     .select("completed")
