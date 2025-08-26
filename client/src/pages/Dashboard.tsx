@@ -65,22 +65,27 @@ export default function Dashboard() {
 
   // 간단 추가 폼 (원하면 숨겨도 됨)
   async function onAdd(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!user) return;
-    const fd = new FormData(e.currentTarget);
-    const title = (fd.get("title") as string)?.trim();
-    const due = (fd.get("due") as string) || undefined;
-    if (!title) return;
-    try {
-      const row = await addTask(user.id, title, due);
-      setTasks(prev => [row, ...prev]);
-      e.currentTarget.reset();
-    } catch (err: any) {
-  console.error("추가 에러:", err);
-  // 👇 에러 전문을 알림으로도 띄우자
-  alert("추가 실패: " + (err?.message ?? JSON.stringify(err)));
-}
+  e.preventDefault();
+  if (!user) return;
+
+  // ✅ 먼저 폼 엘리먼트를 잡아둠 (await 전에!)
+  const form = e.currentTarget as HTMLFormElement;
+  const fd = new FormData(form);
+  const title = (fd.get("title") as string)?.trim();
+  const due = (fd.get("due") as string) || undefined;
+  if (!title) return;
+
+  try {
+    const row = await addTask(user.id, title, due);
+    setTasks(prev => [row, ...prev]);
+
+    // ✅ 이벤트 객체 대신, 위에서 잡아둔 form으로 reset
+    form.reset();
+  } catch (err: any) {
+    console.error("추가 에러:", err);
+    alert("추가 실패: " + (err?.message ?? JSON.stringify(err)));
   }
+}
 
   // 로딩 중
   if (loading) {
