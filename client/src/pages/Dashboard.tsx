@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Task } from "../types";
 
-// Supabase 연동
 import { useAuth } from "../hooks/useAuth";
-import { fetchTasks, addTask, toggleTask as toggleTaskDb } from "../utils/tasksDb";
+import {
+  fetchTasks,
+  addTask,
+  toggleTask as toggleTaskDb,
+  updateTask as updateTaskDb,
+  deleteTask as deleteTaskDb,
+} from "../utils/tasksDb";
 import AuthPanel from "../components/AuthPanel";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const todayStr = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+  const todayStr = new Date().toISOString().slice(0, 10);
 
-  // 로그인 후 DB에서 목록 로드
   useEffect(() => {
     if (!user) {
       setTasks([]);
@@ -28,31 +32,25 @@ export default function Dashboard() {
     })();
   }, [user]);
 
-  // 분류/진행률 계산
   const { today, overdue, completedToday, totalToday, progress } = useMemo(() => {
     const t: Task[] = [];
     const o: Task[] = [];
     const c: Task[] = [];
-
     for (const it of tasks) {
       const hasDue = !!it.dueDate;
       const isToday = hasDue ? it.dueDate === todayStr : it.createdAt.startsWith(todayStr);
       const isOverdue = hasDue && it.dueDate! < todayStr && !it.completed;
-
       if (isOverdue) o.push(it);
       else if (isToday && !it.completed) t.push(it);
       else if (isToday && it.completed) c.push(it);
     }
     const sortDesc = (a: Task, b: Task) => b.createdAt.localeCompare(a.createdAt);
-    const t2 = t.sort(sortDesc);
-    const o2 = o.sort(sortDesc);
-    const c2 = c.sort(sortDesc);
+    const t2 = t.sort(sortDesc), o2 = o.sort(sortDesc), c2 = c.sort(sortDesc);
     const total = t2.length + c2.length;
     const prog = total === 0 ? 0 : Math.round((c2.length / total) * 100);
     return { today: t2, overdue: o2, completedToday: c2, totalToday: total, progress: prog };
   }, [tasks, todayStr]);
 
-  // 완료 토글 → DB 업데이트 후 상태 반영
   async function toggle(id: string) {
     try {
       const updated = await toggleTaskDb(id);
@@ -63,11 +61,37 @@ export default function Dashboard() {
     }
   }
 
-  // 간단 추가 폼
+  // 제목/마감일 수정(간단: prompt 2개)
+  async function editTask(t: Task) {
+    const newTitle = window.prompt("새 제목을 입력하세요", t.title);
+    if (newTitle === null) return; // 취소
+    const newDue = window.prompt("마감일(YYYY-MM-DD, 비우면 제거)", t.dueDate ?? "");
+    const dueNormalized = newDue === "" ? null : (newDue ?? t.dueDate ?? null);
+
+    try {
+      const updated = await updateTaskDb(t.id, { title: newTitle.trim(), dueDate: dueNormalized as any });
+      setTasks(prev => prev.map(x => (x.id === t.id ? updated : x)));
+    } catch (e: any) {
+      console.error("수정 에러:", e);
+      alert("수정 실패: " + (e?.message ?? JSON.stringify(e)));
+    }
+  }
+
+  async function removeTask(id: string) {
+    if (!window.confirm("정말 삭제할까요?")) return;
+    try {
+      await deleteTaskDb(id);
+      setTasks(prev => prev.filter(t => t.id !== id));
+    } catch (e: any) {
+      console.error("삭제 에러:", e);
+      alert("삭제 실패: " + (e?.message ?? JSON.stringify(e)));
+    }
+  }
+
   async function onAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user) return;
-    const form = e.currentTarget as HTMLFormElement; // await 전에 확보
+    const form = e.currentTarget as HTMLFormElement;
     const fd = new FormData(form);
     const title = (fd.get("title") as string)?.trim();
     const due = (fd.get("due") as string) || undefined;
@@ -75,7 +99,7 @@ export default function Dashboard() {
 
     try {
       const row = await addTask(user.id, title, due);
-      setTasks(prev => [row, ...prev]); // 화면 즉시 반영
+      setTasks(prev => [row, ...prev]);
       form.reset();
     } catch (err: any) {
       console.error("추가 에러:", err);
@@ -83,7 +107,6 @@ export default function Dashboard() {
     }
   }
 
-  // 로딩 중
   if (loading) {
     return (
       <section style={{ display: "grid", gap: 16 }}>
@@ -95,7 +118,6 @@ export default function Dashboard() {
     );
   }
 
-  // 비로그인 → 로그인 패널만 노출
   if (!user) {
     return (
       <section style={{ display: "grid", gap: 16 }}>
@@ -108,7 +130,6 @@ export default function Dashboard() {
     );
   }
 
-  // 로그인 상태 → 화면
   return (
     <section style={{ display: "grid", gap: 16 }}>
       <header style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 12 }}>
@@ -117,13 +138,11 @@ export default function Dashboard() {
           {user.email}님, 환영합니다! 오늘({todayStr}) 진행 요약 · 오늘 할 일 {totalToday}개 중 {completedToday.length}개 완료
         </p>
 
-        {/* 진행률 바 */}
         <div style={{ marginTop: 10, height: 8, background: "#f3f4f6", borderRadius: 999 }}>
           <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: "#6366f1", transition: "width .2s" }} />
         </div>
         <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>{progress}%</div>
 
-        {/* 추가 폼 */}
         <form onSubmit={onAdd} style={{ marginTop: 12, display: "flex", gap: 8 }}>
           <input name="title" placeholder="새 퀘스트" />
           <input name="due" type="date" />
@@ -131,38 +150,35 @@ export default function Dashboard() {
         </form>
       </header>
 
-      {/* 📋 전체 퀘스트 (날짜 상관없이 전부) */}
+      {/* 전체 퀘스트 */}
       <Section title="📋 전체 퀘스트">
         {tasks.length === 0 ? (
           <Empty text="퀘스트가 아직 없어요" />
         ) : (
-          tasks.map(t => <TaskRow key={t.id} t={t} onToggle={toggle} />)
+          tasks.map(t => <TaskRow key={t.id} t={t} onToggle={toggle} onEdit={() => editTask(t)} onDelete={() => removeTask(t.id)} />)
         )}
       </Section>
 
-      {/* ⚠ 마감 지남 */}
       {overdue.length > 0 && (
         <Section title="⚠ 마감 지남" hint="가능한 빨리 처리하세요">
           {overdue.map(t => (
-            <TaskRow key={t.id} t={t} onToggle={toggle} overdue />
+            <TaskRow key={t.id} t={t} onToggle={toggle} overdue onEdit={() => editTask(t)} onDelete={() => removeTask(t.id)} />
           ))}
         </Section>
       )}
 
-      {/* 오늘의 퀘스트 */}
       <Section title="오늘의 퀘스트">
         {today.length === 0 ? (
           <Empty text={totalToday === 0 ? "오늘 할 일이 없어요 🎉" : "모든 오늘 할 일을 끝냈어요 ✅"} />
         ) : (
-          today.map(t => <TaskRow key={t.id} t={t} onToggle={toggle} />)
+          today.map(t => <TaskRow key={t.id} t={t} onToggle={toggle} onEdit={() => editTask(t)} onDelete={() => removeTask(t.id)} />)
         )}
       </Section>
 
-      {/* 오늘 완료한 항목 */}
       {completedToday.length > 0 && (
         <Section title="오늘 완료한 항목">
           {completedToday.map(t => (
-            <TaskRow key={t.id} t={t} onToggle={toggle} />
+            <TaskRow key={t.id} t={t} onToggle={toggle} onEdit={() => editTask(t)} onDelete={() => removeTask(t.id)} />
           ))}
         </Section>
       )}
@@ -182,7 +198,19 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-function TaskRow({ t, onToggle, overdue }: { t: Task; onToggle: (id: string) => void; overdue?: boolean }) {
+function TaskRow({
+  t,
+  onToggle,
+  overdue,
+  onEdit,
+  onDelete,
+}: {
+  t: Task;
+  onToggle: (id: string) => void;
+  overdue?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <li style={{ display: "flex", gap: 8, alignItems: "center", border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
       <input type="checkbox" checked={t.completed} onChange={() => onToggle(t.id)} />
@@ -195,6 +223,19 @@ function TaskRow({ t, onToggle, overdue }: { t: Task; onToggle: (id: string) => 
           생성: {new Date(t.createdAt).toLocaleString()}
           {t.dueDate ? ` · 마감: ${t.dueDate}` : ""}
         </div>
+      </div>
+
+      {/* 수정/삭제 버튼 */}
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={onEdit} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", cursor: "pointer" }}>
+          수정
+        </button>
+        <button
+          onClick={onDelete}
+          style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #ef4444", color: "#ef4444", cursor: "pointer" }}
+        >
+          삭제
+        </button>
       </div>
     </li>
   );
