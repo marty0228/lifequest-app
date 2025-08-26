@@ -75,10 +75,11 @@ export default function Dashboard() {
       const row = await addTask(user.id, title, due);
       setTasks(prev => [row, ...prev]);
       e.currentTarget.reset();
-    } catch (err) {
-      console.error(err);
-      alert("추가 실패");
-    }
+    } catch (err: any) {
+  console.error("추가 에러:", err);
+  // 👇 에러 전문을 알림으로도 띄우자
+  alert("추가 실패: " + (err?.message ?? JSON.stringify(err)));
+}
   }
 
   // 로딩 중
