@@ -68,6 +68,8 @@ export default function ProfilePage() {
         <div>
           <div><strong>표시 이름:</strong> {profile.displayName ?? "미설정"}</div>
           <div><strong>아이디(닉):</strong> {profile.username ?? "미설정"}</div>
+          <div><strong>레벨:</strong> {profile.level ?? 1}</div>
+          <div><strong>XP:</strong> {profile.xp ?? 0}</div>
           <div><strong>UID:</strong> {profile.id}</div>
           {profile.createdAt && <div><strong>생성일:</strong> {new Date(profile.createdAt).toLocaleString()}</div>}
           {profile.updatedAt && <div><strong>수정일:</strong> {new Date(profile.updatedAt).toLocaleString()}</div>}
