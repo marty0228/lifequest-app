@@ -14,13 +14,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
-supabase.auth.onAuthStateChange(async (event, session) => {
+let ensuredOnce = false; // (핫리로드/중복 방지용, 선택)
+
+supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_IN" && session?.user) {
-    const meta = session.user.user_metadata || {};
-    await ensureMyProfile(session.user.id, {
-      username: meta.user_name ?? null,
-      displayName: meta.full_name ?? meta.name ?? null,
-      avatarUrl: meta.avatar_url ?? null,
-    });
+    if (ensuredOnce) return;     // 선택: 여러 번 실행 방지
+    ensuredOnce = true;
+
+    // ✅ 기다리지 말고 백그라운드로 실행
+    ensureMyProfile(session.user.id, { xp: 0, level: 1 })
+      .then(p => console.log("[ensureMyProfile] ok:", p))
+      .catch(e => console.error("[ensureMyProfile] failed:", e));
   }
 });
