@@ -18,6 +18,7 @@ export default function Layout() {
         <NavLink to="/tasks">할 일</NavLink>
         <NavLink to="/habits">습관</NavLink>
         <NavLink to="/settings">설정</NavLink>
+        <NavLink to="/me">내 프로필</NavLink>
       </nav>
 
       {/* 오른쪽 페이지 */}
