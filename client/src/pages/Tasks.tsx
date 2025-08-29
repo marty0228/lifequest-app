@@ -1,4 +1,3 @@
-// client/src/pages/Tasks.tsx
 import { useEffect, useState } from "react";
 import { listMyTasks, addTask, toggleTask, removeTask } from "../utils/tasksDb";
 import type { TaskRow } from "../utils/tasksDb";
@@ -9,24 +8,26 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [err, setErr] = useState<string | null>(null);
-
-  // 로그인 안 되어 있으면 안내
   const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) throw error;
+
         if (!user) {
           setAuthed(false);
           return;
         }
         setAuthed(true);
+
         const list = await listMyTasks();
         if (mounted) setItems(list);
       } catch (e: any) {
-        setErr(e.message ?? "목록을 불러오지 못했습니다.");
+        const msg = e?.message || String(e);
+        setErr(msg);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -41,7 +42,7 @@ export default function Tasks() {
       setItems(prev => [row, ...prev]);
       setTitle("");
     } catch (e: any) {
-      setErr(e.message ?? "추가 실패");
+      setErr(e?.message || "추가 실패");
     }
   };
 
@@ -50,7 +51,7 @@ export default function Tasks() {
       const row = await toggleTask(id, next);
       setItems(prev => prev.map(it => (it.id === id ? row : it)));
     } catch (e: any) {
-      setErr(e.message ?? "업데이트 실패");
+      setErr(e?.message || "업데이트 실패");
     }
   };
 
@@ -59,14 +60,13 @@ export default function Tasks() {
       await removeTask(id);
       setItems(prev => prev.filter(it => it.id !== id));
     } catch (e: any) {
-      setErr(e.message ?? "삭제 실패");
+      setErr(e?.message || "삭제 실패");
     }
   };
 
-  if (!authed) {
-    return <section><p>로그인이 필요합니다.</p></section>;
-  }
-  if (loading) return <section><p>불러오는 중…</p></section>;
+  // 화면 상태
+  if (loading) return <section style={{ padding: 16 }}>불러오는 중…</section>;
+  if (!authed) return <section style={{ padding: 16 }}>로그인이 필요합니다.</section>;
 
   return (
     <section style={{ maxWidth: 640, margin: "0 auto" }}>
@@ -82,7 +82,11 @@ export default function Tasks() {
         <button onClick={onAdd}>추가</button>
       </div>
 
-      {err && <p style={{ color: "crimson" }}>{err}</p>}
+      {err && (
+        <p style={{ color: "crimson", whiteSpace: "pre-wrap" }}>
+          {err}
+        </p>
+      )}
 
       {items.length === 0 ? (
         <p>아직 할 일이 없어요.</p>

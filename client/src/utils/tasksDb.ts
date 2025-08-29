@@ -11,36 +11,45 @@ export type TaskRow = {
   updated_at: string | null;
 };
 
-// 내 Tasks 불러오기(최신 먼저)
-export async function listMyTasks() {
+/** 내 Tasks 불러오기 (로그인 안 되어 있으면 빈 배열 반환) */
+export async function listMyTasks(): Promise<TaskRow[]> {
+  const { data: { user }, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
+  if (!user) return []; // 로그인 전엔 빈 목록
+
   const { data, error } = await supabase
     .from("tasks")
     .select("id, user_id, title, note, due_date, done, created_at, updated_at")
     .order("created_at", { ascending: false });
+
   if (error) throw error;
-  return data as TaskRow[];
+  return (data ?? []) as TaskRow[];
 }
 
-// 추가
+/** 추가 */
 export async function addTask(title: string, opts?: { note?: string; due_date?: string | null }) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
   if (!user) throw new Error("로그인이 필요합니다.");
+
   const payload = {
     user_id: user.id,
     title,
     note: opts?.note ?? null,
     due_date: opts?.due_date ?? null,
   };
+
   const { data, error } = await supabase
     .from("tasks")
     .insert(payload)
     .select("id, user_id, title, note, due_date, done, created_at, updated_at")
     .single();
+
   if (error) throw error;
   return data as TaskRow;
 }
 
-// 완료 토글
+/** 완료 토글 */
 export async function toggleTask(id: string, done: boolean) {
   const { data, error } = await supabase
     .from("tasks")
@@ -48,12 +57,16 @@ export async function toggleTask(id: string, done: boolean) {
     .eq("id", id)
     .select("id, user_id, title, note, due_date, done, created_at, updated_at")
     .single();
+
   if (error) throw error;
   return data as TaskRow;
 }
 
-// 삭제
+/** 삭제 */
 export async function removeTask(id: string) {
   const { error } = await supabase.from("tasks").delete().eq("id", id);
   if (error) throw error;
 }
+
+export const deleteTask = removeTask;
+export const listTasks = listMyTasks;

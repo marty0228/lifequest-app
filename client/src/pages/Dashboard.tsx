@@ -1,15 +1,28 @@
+// client/src/pages/Dashboard.tsx
 import { useEffect, useMemo, useState } from "react";
 import type { Task } from "../types";
-
 import { useAuth } from "../hooks/useAuth";
 import {
-  fetchTasks,
-  addTask,
-  toggleTask as toggleTaskDb,
-  updateTask as updateTaskDb,
-  deleteTask as deleteTaskDb,
+  listMyTasks,           // ✅ 목록
+  addTask as addTaskDb,  // ✅ 추가
+  toggleTask as toggleTaskDb, // ✅ 완료 토글(id, done)
+  removeTask as removeTaskDb, // ✅ 삭제
+  type TaskRow,          // ✅ DB 행 타입
 } from "../utils/tasksDb";
+import { supabase } from "../utils/supabase"; // ✅ 간단 업데이트용
 import AuthPanel from "../components/AuthPanel";
+
+// DB 행 → 화면용 Task 매핑
+function toTask(r: TaskRow): Task {
+  return {
+    id: r.id,
+    title: r.title,
+    completed: !!r.done,
+    createdAt: r.created_at ?? new Date().toISOString(),
+    
+    dueDate: r.due_date ?? undefined, // ✅ undefined로 매핑
+  };
+}
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -23,8 +36,8 @@ export default function Dashboard() {
     }
     (async () => {
       try {
-        const rows = await fetchTasks(user.id);
-        setTasks(rows);
+        const rows = await listMyTasks();
+        setTasks(rows.map(toTask));
       } catch (e) {
         console.error(e);
         alert("작업 목록을 불러오지 못했습니다.");
@@ -51,9 +64,13 @@ export default function Dashboard() {
     return { today: t2, overdue: o2, completedToday: c2, totalToday: total, progress: prog };
   }, [tasks, todayStr]);
 
+  // 완료 토글(id만 받던 기존 코드 → 현재 상태를 보고 done값 계산해서 넘김)
   async function toggle(id: string) {
     try {
-      const updated = await toggleTaskDb(id);
+      const cur = tasks.find(t => t.id === id);
+      const nextDone = !cur?.completed;
+      const updatedRow = await toggleTaskDb(id, nextDone);
+      const updated = toTask(updatedRow);
       setTasks(prev => prev.map(t => (t.id === id ? updated : t)));
     } catch (e: any) {
       console.error("토글 에러:", e);
@@ -61,7 +78,7 @@ export default function Dashboard() {
     }
   }
 
-  // 제목/마감일 수정(간단: prompt 2개)
+  // 제목/마감일 수정: 간단히 Supabase로 직접 업데이트
   async function editTask(t: Task) {
     const newTitle = window.prompt("새 제목을 입력하세요", t.title);
     if (newTitle === null) return; // 취소
@@ -69,7 +86,14 @@ export default function Dashboard() {
     const dueNormalized = newDue === "" ? null : (newDue ?? t.dueDate ?? null);
 
     try {
-      const updated = await updateTaskDb(t.id, { title: newTitle.trim(), dueDate: dueNormalized as any });
+      const { data, error } = await supabase
+        .from("tasks")
+        .update({ title: newTitle.trim(), due_date: dueNormalized })
+        .eq("id", t.id)
+        .select("id, user_id, title, note, due_date, done, created_at, updated_at")
+        .single();
+      if (error) throw error;
+      const updated = toTask(data);
       setTasks(prev => prev.map(x => (x.id === t.id ? updated : x)));
     } catch (e: any) {
       console.error("수정 에러:", e);
@@ -80,7 +104,7 @@ export default function Dashboard() {
   async function removeTask(id: string) {
     if (!window.confirm("정말 삭제할까요?")) return;
     try {
-      await deleteTaskDb(id);
+      await removeTaskDb(id);
       setTasks(prev => prev.filter(t => t.id !== id));
     } catch (e: any) {
       console.error("삭제 에러:", e);
@@ -94,12 +118,12 @@ export default function Dashboard() {
     const form = e.currentTarget as HTMLFormElement;
     const fd = new FormData(form);
     const title = (fd.get("title") as string)?.trim();
-    const due = (fd.get("due") as string) || undefined;
+    const due = (fd.get("due") as string) || null;
     if (!title) return;
 
     try {
-      const row = await addTask(user.id, title, due);
-      setTasks(prev => [row, ...prev]);
+      const row = await addTaskDb(title, { due_date: due });
+      setTasks(prev => [toTask(row), ...prev]);
       form.reset();
     } catch (err: any) {
       console.error("추가 에러:", err);
@@ -150,7 +174,6 @@ export default function Dashboard() {
         </form>
       </header>
 
-      {/* 전체 퀘스트 */}
       <Section title="📋 전체 퀘스트">
         {tasks.length === 0 ? (
           <Empty text="퀘스트가 아직 없어요" />
@@ -225,7 +248,6 @@ function TaskRow({
         </div>
       </div>
 
-      {/* 수정/삭제 버튼 */}
       <div style={{ display: "flex", gap: 6 }}>
         <button onClick={onEdit} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", cursor: "pointer" }}>
           수정
