@@ -1,156 +1,110 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Task } from "../types";
-import { loadTasks, saveTasks } from "../utils/storage";
-
-type Filter = "all" | "active" | "completed";
+// client/src/pages/Tasks.tsx
+import { useEffect, useState } from "react";
+import { listMyTasks, addTask, toggleTask, removeTask } from "../utils/tasksDb";
+import type { TaskRow } from "../utils/tasksDb";
+import { supabase } from "../utils/supabase";
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState<Task[]>(() => loadTasks<Task>());
+  const [items, setItems] = useState<TaskRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState<string>("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [query, setQuery] = useState("");
+  const [err, setErr] = useState<string | null>(null);
 
-  // 로컬스토리지 동기화
+  // 로그인 안 되어 있으면 안내
+  const [authed, setAuthed] = useState(false);
+
   useEffect(() => {
-    saveTasks(tasks);
-  }, [tasks]);
+    let mounted = true;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setAuthed(false);
+          return;
+        }
+        setAuthed(true);
+        const list = await listMyTasks();
+        if (mounted) setItems(list);
+      } catch (e: any) {
+        setErr(e.message ?? "목록을 불러오지 못했습니다.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
-  const filtered = useMemo(() => {
-    let list = tasks;
-    if (filter === "active") list = list.filter(t => !t.completed);
-    if (filter === "completed") list = list.filter(t => t.completed);
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(t => t.title.toLowerCase().includes(q));
+  const onAdd = async () => {
+    if (!title.trim()) return;
+    try {
+      const row = await addTask(title.trim());
+      setItems(prev => [row, ...prev]);
+      setTitle("");
+    } catch (e: any) {
+      setErr(e.message ?? "추가 실패");
     }
-    // 최신 생성일 순
-    return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [tasks, filter, query]);
+  };
 
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const done = tasks.filter(t => t.completed).length;
-    return { total, done, left: total - done };
-  }, [tasks]);
+  const onToggle = async (id: string, next: boolean) => {
+    try {
+      const row = await toggleTask(id, next);
+      setItems(prev => prev.map(it => (it.id === id ? row : it)));
+    } catch (e: any) {
+      setErr(e.message ?? "업데이트 실패");
+    }
+  };
 
-  function addTask() {
-    const name = title.trim();
-    if (!name) return;
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      title: name,
-      completed: false,
-      createdAt: new Date().toISOString(),
-      dueDate: dueDate || undefined,
-    };
-    setTasks(prev => [newTask, ...prev]);
-    setTitle("");
-    setDueDate("");
+  const onDelete = async (id: string) => {
+    try {
+      await removeTask(id);
+      setItems(prev => prev.filter(it => it.id !== id));
+    } catch (e: any) {
+      setErr(e.message ?? "삭제 실패");
+    }
+  };
+
+  if (!authed) {
+    return <section><p>로그인이 필요합니다.</p></section>;
   }
-
-  function toggleTask(id: string) {
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, completed: !t.completed } : t)));
-  }
-
-  function removeTask(id: string) {
-    setTasks(prev => prev.filter(t => t.id !== id));
-  }
-
-  function clearCompleted() {
-    setTasks(prev => prev.filter(t => !t.completed));
-  }
+  if (loading) return <section><p>불러오는 중…</p></section>;
 
   return (
-    <section>
-      <h2 style={{ marginBottom: 12 }}>할일(퀘스트)</h2>
+    <section style={{ maxWidth: 640, margin: "0 auto" }}>
+      <h2 style={{ marginBottom: 12 }}>할 일</h2>
 
-      {/* 입력 영역 */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <input
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="할일을 입력하세요 (예: 알고리즘 과제 제출)"
-          style={{ flex: "1 1 280px", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8 }}
-          onKeyDown={(e) => e.key === "Enter" && addTask()}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="할 일 입력"
+          style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
         />
-        <input
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          style={{ padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8 }}
-        />
-        <button onClick={addTask} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e5e7eb", cursor: "pointer" }}>
-          추가
-        </button>
+        <button onClick={onAdd}>추가</button>
       </div>
 
-      {/* 툴바 */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            onClick={() => setFilter("all")}
-            style={btn(filter === "all")}
-          >전체</button>
-          <button
-            onClick={() => setFilter("active")}
-            style={btn(filter === "active")}
-          >진행중</button>
-          <button
-            onClick={() => setFilter("completed")}
-            style={btn(filter === "completed")}
-          >완료</button>
-        </div>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="검색"
-          style={{ marginLeft: "auto", minWidth: 160, padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8 }}
-        />
-        <button onClick={clearCompleted} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e5e7eb", cursor: "pointer" }}>
-          완료 항목 삭제
-        </button>
-      </div>
+      {err && <p style={{ color: "crimson" }}>{err}</p>}
 
-      {/* 통계 */}
-      <p style={{ marginBottom: 12, color: "#6b7280" }}>
-        총 {stats.total}개 · 완료 {stats.done}개 · 남은 {stats.left}개
-      </p>
-
-      {/* 목록 */}
-      <ul style={{ display: "grid", gap: 8 }}>
-        {filtered.map((t) => (
-          <li key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
-            <input type="checkbox" checked={t.completed} onChange={() => toggleTask(t.id)} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, textDecoration: t.completed ? "line-through" : "none" }}>
-                {t.title}
-              </div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                생성: {new Date(t.createdAt).toLocaleString()}
-                {t.dueDate ? ` · 마감: ${t.dueDate}` : ""}
-              </div>
-            </div>
-            <button onClick={() => removeTask(t.id)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", cursor: "pointer" }}>
-              삭제
-            </button>
-          </li>
-        ))}
-        {filtered.length === 0 && (
-          <li style={{ color: "#6b7280" }}>표시할 항목이 없습니다.</li>
-        )}
-      </ul>
+      {items.length === 0 ? (
+        <p>아직 할 일이 없어요.</p>
+      ) : (
+        <ul style={{ display: "grid", gap: 8, listStyle: "none", padding: 0 }}>
+          {items.map(it => (
+            <li key={it.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={it.done}
+                  onChange={e => onToggle(it.id, e.target.checked)}
+                />
+                <span style={{ textDecoration: it.done ? "line-through" : "none" }}>
+                  {it.title}
+                </span>
+              </label>
+              <button onClick={() => onDelete(it.id)} style={{ fontSize: 12 }}>삭제</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
-}
-
-function btn(active: boolean): React.CSSProperties {
-  return {
-    padding: "8px 12px",
-    borderRadius: 8,
-    border: "1px solid #e5e7eb",
-    cursor: "pointer",
-    background: active ? "#eef2ff" : "white",
-    fontWeight: active ? 700 : 400,
-  };
 }

@@ -1,94 +1,59 @@
-// client/src/utils/tasksDb.ts
 import { supabase } from "./supabase";
-import type { Task } from "../types";
 
-/** DB Row → FE Task 매핑 */
-function mapRow(r: any): Task {
-  return {
-    id: r.id,
-    title: r.title,
-    completed: r.completed,
-    createdAt: r.created_at,            // timestamptz → string
-    dueDate: r.due_date ?? undefined,   // date|null → string|undefined
-  };
-}
+export type TaskRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  note: string | null;
+  due_date: string | null;   // 'YYYY-MM-DD'
+  done: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
 
-/** 공통: 에러를 사람이 읽기 쉽게 던지기 */
-function throwIf(error: any) {
-  if (error) {
-    const msg = error?.message ?? JSON.stringify(error);
-    throw new Error(msg);
-  }
-}
-
-/** 내 퀘스트 목록 불러오기 */
-export async function fetchTasks(userId: string): Promise<Task[]> {
+// 내 Tasks 불러오기(최신 먼저)
+export async function listMyTasks() {
   const { data, error } = await supabase
-    .from("quests")
-    .select("id, user_id, title, completed, due_date, created_at")
-    .eq("user_id", userId)
+    .from("tasks")
+    .select("id, user_id, title, note, due_date, done, created_at, updated_at")
     .order("created_at", { ascending: false });
-
-  throwIf(error);
-  return (data ?? []).map(mapRow);
+  if (error) throw error;
+  return data as TaskRow[];
 }
 
-/** 새 퀘스트 추가 (dueDate는 'YYYY-MM-DD' 문자열 또는 undefined) */
-export async function addTask(userId: string, title: string, dueDate?: string): Promise<Task> {
-  const payload: Record<string, any> = { user_id: userId, title };
-  if (dueDate) payload.due_date = dueDate;
-
+// 추가
+export async function addTask(title: string, opts?: { note?: string; due_date?: string | null }) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("로그인이 필요합니다.");
+  const payload = {
+    user_id: user.id,
+    title,
+    note: opts?.note ?? null,
+    due_date: opts?.due_date ?? null,
+  };
   const { data, error } = await supabase
-    .from("quests")
+    .from("tasks")
     .insert(payload)
-    .select("id, user_id, title, completed, due_date, created_at")
+    .select("id, user_id, title, note, due_date, done, created_at, updated_at")
     .single();
-
-  throwIf(error);
-  return mapRow(data);
+  if (error) throw error;
+  return data as TaskRow;
 }
 
-/** 완료 여부 토글 */
-export async function toggleTask(id: string): Promise<Task> {
-  // 현재 completed 값 조회
-  const { data: cur, error: e1 } = await supabase
-    .from("quests")
-    .select("completed")
-    .eq("id", id)
-    .single();
-
-  throwIf(e1);
-
+// 완료 토글
+export async function toggleTask(id: string, done: boolean) {
   const { data, error } = await supabase
-    .from("quests")
-    .update({ completed: !cur!.completed })
+    .from("tasks")
+    .update({ done })
     .eq("id", id)
-    .select("id, user_id, title, completed, due_date, created_at")
+    .select("id, user_id, title, note, due_date, done, created_at, updated_at")
     .single();
-
-  throwIf(error);
-  return mapRow(data);
+  if (error) throw error;
+  return data as TaskRow;
 }
 
-/** (선택) 제목/마감일 수정 */
-export async function updateTask(id: string, fields: { title?: string; dueDate?: string | null }): Promise<Task> {
-  const patch: Record<string, any> = {};
-  if (fields.title !== undefined) patch.title = fields.title;
-  if (fields.dueDate !== undefined) patch.due_date = fields.dueDate; // null 주면 마감일 제거
-
-  const { data, error } = await supabase
-    .from("quests")
-    .update(patch)
-    .eq("id", id)
-    .select("id, user_id, title, completed, due_date, created_at")
-    .single();
-
-  throwIf(error);
-  return mapRow(data);
-}
-
-/** (선택) 삭제 */
-export async function deleteTask(id: string): Promise<void> {
-  const { error } = await supabase.from("quests").delete().eq("id", id);
-  throwIf(error);
+// 삭제
+export async function removeTask(id: string) {
+  const { error } = await supabase.from("tasks").delete().eq("id", id);
+  if (error) throw error;
 }
