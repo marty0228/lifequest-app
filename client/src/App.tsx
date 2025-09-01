@@ -5,6 +5,7 @@ import Tasks from "./pages/Tasks";
 import Habits from "./pages/Habits";
 import Settings from "./pages/Settings";
 import ProfilePage from "./pages/ProfilePage";
+import GoalsPage from "./pages/Goals";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="habits" element={<Habits />} />
         <Route path="settings" element={<Settings />} />
         <Route path="me" element={<ProfilePage />} />
+        <Route path="goals" element={<GoalsPage />} />
         <Route path="*" element={<div>Not Found</div>} />
       </Route>
     </Routes>

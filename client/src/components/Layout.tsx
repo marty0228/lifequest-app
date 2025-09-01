@@ -16,6 +16,7 @@ export default function Layout() {
       >
         <NavLink to="/dashboard">대시보드</NavLink>
         <NavLink to="/tasks">할 일</NavLink>
+        <NavLink to="/goals">목표</NavLink>
         <NavLink to="/habits">습관</NavLink>
         <NavLink to="/settings">설정</NavLink>
         <NavLink to="/me">내 프로필</NavLink>
