@@ -1,3 +1,4 @@
+// client/src/utils/tasksDb.ts
 import { supabase } from "./supabase";
 
 export type TaskRow = {
@@ -7,6 +8,7 @@ export type TaskRow = {
   note: string | null;
   due_date: string | null;   // 'YYYY-MM-DD'
   done: boolean;
+  goal_id?: string | null;   // ✅ 목표 연결용 (추가)
   created_at: string | null;
   updated_at: string | null;
 };
@@ -19,7 +21,8 @@ export async function listMyTasks(): Promise<TaskRow[]> {
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, user_id, title, note, due_date, done, created_at, updated_at")
+    // ✅ goal_id 함께 조회
+    .select("id, user_id, title, note, due_date, done, goal_id, created_at, updated_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -42,7 +45,8 @@ export async function addTask(title: string, opts?: { note?: string; due_date?: 
   const { data, error } = await supabase
     .from("tasks")
     .insert(payload)
-    .select("id, user_id, title, note, due_date, done, created_at, updated_at")
+    // ✅ goal_id 함께 반환
+    .select("id, user_id, title, note, due_date, done, goal_id, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -55,7 +59,8 @@ export async function toggleTask(id: string, done: boolean) {
     .from("tasks")
     .update({ done })
     .eq("id", id)
-    .select("id, user_id, title, note, due_date, done, created_at, updated_at")
+    // ✅ goal_id 함께 반환
+    .select("id, user_id, title, note, due_date, done, goal_id, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -68,5 +73,6 @@ export async function removeTask(id: string) {
   if (error) throw error;
 }
 
+/** 하위호환 별칭(기존 코드 보호용) */
 export const deleteTask = removeTask;
 export const listTasks = listMyTasks;
