@@ -1,25 +1,24 @@
 // client/src/pages/Dashboard.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode, type FormEvent } from "react";
 import type { Task } from "../types";
 import { useAuth } from "../hooks/useAuth";
 import {
-  listMyTasks,           // ✅ 목록
-  addTask as addTaskDb,  // ✅ 추가
-  toggleTask as toggleTaskDb, // ✅ 완료 토글(id, done)
-  removeTask as removeTaskDb, // ✅ 삭제
-  type TaskRow,          // ✅ DB 행 타입
+  listMyTasks,                 // ✅ 목록
+  addTask as addTaskDb,        // ✅ 추가
+  toggleTask as toggleTaskDb,  // ✅ 완료 토글(id, done)
+  removeTask as removeTaskDb,  // ✅ 삭제
+  updateTask as updateTaskDb,  // ✅ 수정 (통일)
+  type TaskRow as DbTaskRow,   // ✅ DB 행 타입 (별칭)
 } from "../utils/tasksDb";
-import { supabase } from "../utils/supabase"; // ✅ 간단 업데이트용
 import AuthPanel from "../components/AuthPanel";
 
 // DB 행 → 화면용 Task 매핑
-function toTask(r: TaskRow): Task {
+function toTask(r: DbTaskRow): Task {
   return {
     id: r.id,
     title: r.title,
     completed: !!r.done,
     createdAt: r.created_at ?? new Date().toISOString(),
-    
     dueDate: r.due_date ?? undefined, // ✅ undefined로 매핑
   };
 }
@@ -64,7 +63,7 @@ export default function Dashboard() {
     return { today: t2, overdue: o2, completedToday: c2, totalToday: total, progress: prog };
   }, [tasks, todayStr]);
 
-  // 완료 토글(id만 받던 기존 코드 → 현재 상태를 보고 done값 계산해서 넘김)
+  // 완료 토글
   async function toggle(id: string) {
     try {
       const cur = tasks.find(t => t.id === id);
@@ -78,7 +77,7 @@ export default function Dashboard() {
     }
   }
 
-  // 제목/마감일 수정: 간단히 Supabase로 직접 업데이트
+  // 제목/마감일 수정: 유틸 함수로 통일(updateTaskDb)
   async function editTask(t: Task) {
     const newTitle = window.prompt("새 제목을 입력하세요", t.title);
     if (newTitle === null) return; // 취소
@@ -86,14 +85,11 @@ export default function Dashboard() {
     const dueNormalized = newDue === "" ? null : (newDue ?? t.dueDate ?? null);
 
     try {
-      const { data, error } = await supabase
-        .from("tasks")
-        .update({ title: newTitle.trim(), due_date: dueNormalized })
-        .eq("id", t.id)
-        .select("id, user_id, title, note, due_date, done, created_at, updated_at")
-        .single();
-      if (error) throw error;
-      const updated = toTask(data);
+      const updatedRow = await updateTaskDb(t.id, {
+        title: newTitle.trim(),
+        due_date: dueNormalized,
+      });
+      const updated = toTask(updatedRow);
       setTasks(prev => prev.map(x => (x.id === t.id ? updated : x)));
     } catch (e: any) {
       console.error("수정 에러:", e);
@@ -112,7 +108,7 @@ export default function Dashboard() {
     }
   }
 
-  async function onAdd(e: React.FormEvent<HTMLFormElement>) {
+  async function onAdd(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user) return;
     const form = e.currentTarget as HTMLFormElement;
@@ -209,7 +205,7 @@ export default function Dashboard() {
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
