@@ -8,8 +8,8 @@ import {
   toggleTask as toggleTaskDb,  // ✅ 완료 토글(id, done)
   removeTask as removeTaskDb,  // ✅ 삭제
   updateTask as updateTaskDb,  // ✅ 수정 (통일)
-  type TaskRow as DbTaskRow,   // ✅ DB 행 타입 (별칭)
 } from "../utils/tasksDb";
+import type { TaskRow as DbTaskRow } from "../types"; // ✅ DB 행 타입 (별칭), type을 전부 types.ts에서 import 하는 걸로 통일함
 import AuthPanel from "../components/AuthPanel";
 
 // DB 행 → 화면용 Task 매핑

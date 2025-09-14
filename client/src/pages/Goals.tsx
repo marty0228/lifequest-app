@@ -2,8 +2,8 @@ import { useEffect,  useState } from "react";
 import { supabase } from "../utils/supabase";
 import {
   listMyGoals, addGoal, updateGoal, removeGoal,
-  type GoalRow
 } from "../utils/goalsDb";
+import type { GoalRow } from "../types";
 
 type GoalView = GoalRow & { progress: number }; // 0~100
 
