@@ -1,6 +1,6 @@
 // client/src/components/TaskRow.tsx
 import { useState } from "react";
-import type { TaskRow as T } from "../utils/tasksDb";
+import type { TaskRow as T } from "../types";
 
 type Props = {
   t: T;
