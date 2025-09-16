@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Task } from "../types";
-import { loadTasks, saveTasks } from "../utils/storage";
+import type { TaskRow } from "../types";
+import { listMyTasks, toggleTask } from "../utils/tasksDb";
 
-// yyyy-mm-dd
-const ymd = (d: Date) => d.toISOString().slice(0, 10);
-// 달력에 표시할 기준일: dueDate가 있으면 그날, 없으면 createdAt 날짜
-const taskDate = (t: Task) => (t.dueDate || t.createdAt).slice(0, 10);
+// 로컬 타임존 기준 YYYY-MM-DD
+const ymd = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 
-// 해당 달의 1일을 기준으로 6주(42칸) 그리드 생성, 요일은 월~일
+// 월(1)~일(64) 비트
+const DAY_BITS = [1, 2, 4, 8, 16, 32, 64] as const;
+// JS: 0=일, 1=월... 을 월=0 기준으로 바꿔서 쓰기
+const mondayIndex = (d: Date) => (d.getDay() + 6) % 7;
+const hasBit = (mask: number, bit: number) => (mask & bit) !== 0;
+
+// 해당 달의 1일을 기준으로 6주(42칸) 그리드 생성 (월~일)
 function getMonthGrid(base: Date) {
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7; // 월=0 기준
@@ -23,64 +32,98 @@ function getMonthGrid(base: Date) {
   return cells;
 }
 
-export default function Habits() {
-  const [tasks, setTasks] = useState<Task[]>(() => loadTasks<Task>());
-  const [month, setMonth] = useState<Date>(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
-  const [selected, setSelected] = useState<string | null>(null); // yyyy-mm-dd
+// 하루에 표시할 작업 계산 규칙
+// - 과거/오늘: 그날 '마감(due_date === dStr)' + '반복(repeat_mask 에 해당 요일 on)' + (due/repeat 둘 다 없으면 생성일자 created_at === dStr)
+// - 미래: 그날 마감(due_date === dStr)만 표시
+function getTasksOfDate(d: Date, tasks: TaskRow[], todayStr: string) {
+  const dStr = ymd(d);
+  const isPast = dStr < todayStr;
+  const isTodayOrFuture = dStr >= todayStr;
+  const wBit = DAY_BITS[mondayIndex(d)];
 
-  // 다른 탭/페이지에서 수정되면 동기화
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "lifequest.tasks") setTasks(loadTasks<Task>());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  return tasks.filter((t) => {
+    // 1) 마감일 당일은 언제든 표시 (과거든 미래든)
+    if (t.due_date && t.due_date === dStr) return true;
 
-  // 날짜별 집계: all/done/left
-  const byDate = useMemo(() => {
-    const map = new Map<string, { all: Task[]; done: number; left: number }>();
-    for (const t of tasks) {
-      const d = taskDate(t);
-      if (!map.has(d)) map.set(d, { all: [], done: 0, left: 0 });
-      const b = map.get(d)!;
-      b.all.push(t);
-      t.completed ? (b.done += 1) : (b.left += 1);
+    // 2) 반복 항목
+    if (t.repeat_mask) {
+      // 과거는 반복 표시하지 않음
+      if (isPast) return false;
+
+      // today/future: 요일이 맞고, (due_date가 있으면 그 날짜 이내)일 때만
+      if (!hasBit(t.repeat_mask, wBit)) return false;
+      if (t.due_date && dStr > t.due_date) return false;
+      return true;
     }
-    return map;
-  }, [tasks]);
+
+    // 3) 반복/마감 없는 1회성: 생성일자에만 표시
+    if (!t.due_date && !t.repeat_mask && t.created_at) {
+      const created = ymd(new Date(t.created_at));
+      return created === dStr;
+    }
+
+    return false;
+  });
+}
+
+export default function Calendar() {
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  const now = new Date();
+  const todayStr = ymd(now);
+
+  const [month, setMonth] = useState<Date>(() => new Date(now.getFullYear(), now.getMonth(), 1));
+  const [selected, setSelected] = useState<string | null>(todayStr); // 기본 오늘
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await listMyTasks();
+        setTasks(list);
+      } catch (e: any) {
+        setErr(e.message ?? "작업 목록을 불러오지 못했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const grid = useMemo(() => getMonthGrid(month), [month]);
   const monthLabel = `${month.getFullYear()}년 ${month.getMonth() + 1}월`;
-  const todayStr = ymd(new Date());
 
   const prevMonth = () =>
     setMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
   const nextMonth = () =>
     setMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
   const goToday = () => {
-    const now = new Date();
-    setMonth(new Date(now.getFullYear(), now.getMonth(), 1));
-    setSelected(ymd(now));
+    const n = new Date();
+    setMonth(new Date(n.getFullYear(), n.getMonth(), 1));
+    setSelected(ymd(n));
   };
 
-  const toggleComplete = (id: string) =>
-    setTasks((prev) => {
-      const next = prev.map((t) =>
-        t.id === id ? { ...t, completed: !t.completed } : t
-      );
-      saveTasks(next);
-      return next;
-    });
+  const onToggle = async (id: string, next: boolean) => {
+    try {
+      const row = await toggleTask(id, next);
+      setTasks((prev) => prev.map((t) => (t.id === id ? row : t)));
+    } catch (e: any) {
+      setErr(e.message ?? "상태 변경 실패");
+    }
+  };
 
   const selectedList = useMemo(() => {
     if (!selected) return [];
-    const b = byDate.get(selected);
-    return b ? [...b.all].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : [];
-  }, [selected, byDate]);
+    const d = new Date(selected);
+    return getTasksOfDate(d, tasks, todayStr).sort((a, b) => {
+      const ac = a.created_at ?? "";
+      const bc = b.created_at ?? "";
+      return bc.localeCompare(ac);
+    });
+  }, [selected, tasks, todayStr]);
+
+  if (loading) return <section><p>불러오는 중…</p></section>;
+  if (err) return <section><p style={{ color: "crimson" }}>{err}</p></section>;
 
   return (
     <section style={{ display: "grid", gap: 16 }}>
@@ -89,16 +132,12 @@ export default function Habits() {
         <button onClick={prevMonth} style={navBtn}>◀︎</button>
         <strong>{monthLabel}</strong>
         <button onClick={nextMonth} style={navBtn}>▶︎</button>
-        <button onClick={goToday} style={{ ...navBtn, marginLeft: "auto" }}>
-          오늘로
-        </button>
+        <button onClick={goToday} style={{ ...navBtn, marginLeft: "auto" }}>오늘로</button>
       </header>
 
       <div style={weekHeader}>
         {["월","화","수","목","금","토","일"].map((w) => (
-          <div key={w} style={{ fontSize: 12, color: "#6b7280", textAlign: "center" }}>
-            {w}
-          </div>
+          <div key={w} style={{ fontSize: 12, color: "#6b7280", textAlign: "center" }}>{w}</div>
         ))}
       </div>
 
@@ -106,12 +145,13 @@ export default function Habits() {
         {grid.map((d, i) => {
           const dStr = ymd(d);
           const isThisMonth = d.getMonth() === month.getMonth();
-          const b = byDate.get(dStr);
-          const total = b?.all.length ?? 0;
-          const done = b?.done ?? 0;
-          const left = b?.left ?? 0;
+          const list = getTasksOfDate(d, tasks, todayStr);
 
-          // 상태 색상: 없음=회색, 모두 완료=초록, 일부/미완료=주황
+          const total = list.length;
+          const done = list.filter((t) => t.done).length;
+          const left = total - done;
+
+          // 없음=회색, 전부 완료=초록, 일부/미완료=주황
           const statusColor = total === 0 ? "#e5e7eb" : left === 0 ? "#22c55e" : "#f59e0b";
           const isToday = dStr === todayStr;
           const isSelected = dStr === selected;
@@ -129,9 +169,7 @@ export default function Habits() {
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontWeight: 600, fontSize: 12 }}>{d.getDate()}</div>
-                {isToday && (
-                  <span style={todayBadge}>오늘</span>
-                )}
+                {isToday && <span style={todayBadge}>오늘</span>}
               </div>
 
               {/* 완료율 바 */}
@@ -153,7 +191,7 @@ export default function Habits() {
         <Legend color="#e5e7eb" label="퀘스트 없음" />
       </div>
 
-      {/* 선택 날짜의 퀘스트 상세 */}
+      {/* 선택 날짜 상세 */}
       <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <h3 style={{ margin: 0 }}>선택한 날짜</h3>
@@ -166,13 +204,15 @@ export default function Habits() {
           <ul style={{ display: "grid", gap: 8, margin: 0, padding: 0, listStyle: "none" }}>
             {selectedList.map((t) => (
               <li key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
-                <input type="checkbox" checked={t.completed} onChange={() => toggleComplete(t.id)} />
+                <input type="checkbox" checked={t.done} onChange={(e) => onToggle(t.id, e.target.checked)} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, textDecoration: t.completed ? "line-through" : "none" }}>
+                  <div style={{ fontWeight: 600, textDecoration: t.done ? "line-through" : "none" }}>
                     {t.title}
                   </div>
                   <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    기준일: {taskDate(t)}{t.dueDate ? " (마감일)" : " (생성일)"}
+                    {t.due_date ? `마감일: ${t.due_date}` :
+                      t.created_at ? `생성일: ${ymd(new Date(t.created_at))}` : ""}
+                    {t.repeat_mask ? " • 반복" : ""}
                   </div>
                 </div>
               </li>
@@ -200,19 +240,16 @@ const navBtn: React.CSSProperties = {
   cursor: "pointer",
   background: "white",
 };
-
 const weekHeader: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(7, 1fr)",
   gap: 6,
 };
-
 const gridWrap: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(7, 1fr)",
   gap: 6,
 };
-
 const cell: React.CSSProperties = {
   borderRadius: 12,
   padding: 10,
@@ -220,7 +257,6 @@ const cell: React.CSSProperties = {
   textAlign: "left",
   background: "white",
 };
-
 const todayBadge: React.CSSProperties = {
   fontSize: 10,
   padding: "2px 6px",

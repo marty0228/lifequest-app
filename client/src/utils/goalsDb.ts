@@ -1,18 +1,5 @@
 import { supabase } from "./supabase";
-
-/** DB 행 타입 */
-export type GoalRow = {
-  id: string;
-  user_id: string;
-  title: string;
-  scope: "short" | "long";
-  start_date: string | null;
-  end_date: string | null;
-  target_count: number;
-  achieved_count: number;
-  created_at: string | null;
-  updated_at: string | null;
-};
+import type { GoalRow } from "../types";
 
 /** 내 목표 목록 */
 export async function listMyGoals(): Promise<GoalRow[]> {
