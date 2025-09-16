@@ -2,9 +2,9 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
-import Habits from "./pages/Habits";
+import Habits from "./pages/Calendar";
 import Settings from "./pages/Settings";
-import ProfilePage from "./pages/ProfilePage";
+import ProfilePage from "./pages/Profilepage";
 import GoalsPage from "./pages/Goals";
 
 export default function App() {

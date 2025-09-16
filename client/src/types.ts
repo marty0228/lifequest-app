@@ -38,3 +38,17 @@ export type AddTaskOpts = {
   goal_id?: string | null;
   repeat_mask?: number | null;     // e.g. 월/수/금 = 1+4+16 = 21
 };
+
+/** DB 행 타입 */
+export type GoalRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  scope: "short" | "long";
+  start_date: string | null;
+  end_date: string | null;
+  target_count: number;
+  achieved_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
