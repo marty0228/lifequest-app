@@ -3,6 +3,7 @@ import { listMyTasks, addTask, toggleTask, removeTask } from "../utils/tasksDb";
 import { supabase } from "../utils/supabase";
 import { listMyGoals, assignTaskToGoal } from "../utils/goalsDb";
 import type { TaskRow, GoalRow } from "../types";
+import { dueRemainLabel, endOfDayLocal, msUntilNextMidnight } from "../utils/time";
 
 // 요일 비트값 (월=1, 화=2, ... 일=64)
 const DAY_BITS = [1, 2, 4, 8, 16, 32, 64] as const;
@@ -20,8 +21,17 @@ function prettyRepeat(mask: number | null) {
   if (mask === 96) return "주말(토/일)";
   if (mask === 127) return "매일";
   const picked: string[] = [];
-  DAY_BITS.forEach((bit, i) => { if (maskHas(mask, bit)) picked.push(DAY_LABELS[i]); });
+  DAY_BITS.forEach((bit, i) => {
+    if (maskHas(mask, bit)) picked.push(DAY_LABELS[i]);
+  });
   return picked.join(",");
+}
+
+// 계산형: 마감 지남 & 실패 여부 (DB 저장 없이 UI 계산)
+function isFailedUI(it: TaskRow, now: Date) {
+  if (!it.due_date) return false;
+  if (it.done) return false;
+  return now.getTime() > endOfDayLocal(it.due_date).getTime();
 }
 
 export default function Tasks() {
@@ -29,11 +39,14 @@ export default function Tasks() {
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState<string>("");   // YYYY-MM-DD
+  const [dueDate, setDueDate] = useState<string>(""); // YYYY-MM-DD
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [repeatMask, setRepeatMask] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
+
+  // now: 남은시간 라벨/자정 스위치용
+  const [now, setNow] = useState<Date>(new Date());
 
   useEffect(() => {
     let mounted = true;
@@ -53,6 +66,38 @@ export default function Tasks() {
       }
     })();
     return () => { mounted = false; };
+  }, []);
+
+  // ⏱ 남은시간 카운트다운: 매 분 now 갱신 (UI만 변함)
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // 🌙 자정에 즉시 리렌더(실패 표시 전환)
+  useEffect(() => {
+    // 마운트 시 1회 보정
+    setNow(new Date());
+
+    // 다음 자정에 한 번 실행 → 이후 24h 간격
+    let intervalId: number | undefined;
+    const timeoutId = window.setTimeout(() => {
+      const run = () => setNow(new Date());
+      run();
+      intervalId = window.setInterval(run, 24 * 60 * 60 * 1000);
+    }, msUntilNextMidnight());
+
+    // 탭 복귀 시 보정
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setNow(new Date());
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId) window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const onAdd = async () => {
@@ -181,46 +226,68 @@ export default function Tasks() {
         <p>아직 할 일이 없어요.</p>
       ) : (
         <ul style={{ display: "grid", gap: 8, listStyle: "none", padding: 0 }}>
-          {items.map(it => (
-            <li key={it.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 10, display: "grid", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={it.done}
-                    onChange={e => onToggle(it.id, e.target.checked)}
-                  />
-                  <span style={{ textDecoration: it.done ? "line-through" : "none" }}>
-                    {it.title}
-                  </span>
-                </label>
-                <button onClick={() => onDelete(it.id)} style={{ fontSize: 12 }}>삭제</button>
-              </div>
+          {items.map(it => {
+            const dueInfo = it.due_date ? dueRemainLabel(it.due_date, now) : null;
+            const failed = isFailedUI(it, now);
+            const timeStyle: React.CSSProperties = {
+              fontSize: 12,
+              color: dueInfo ? (dueInfo.urgent ? "#ef4444" : "#6b7280") : "#6b7280",
+              fontWeight: dueInfo?.urgent ? 600 : 400,
+            };
 
-              {/* 목표 선택 */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>목표:</span>
-                <select
-                  value={it.goal_id ?? ""}
-                  onChange={e => onAssignGoal(it.id, e.target.value)}
-                  style={{ padding: "4px 6px", borderRadius: 6 }}
-                >
-                  <option value="">(연결 안 함)</option>
-                  {goals.map(g => (
-                    <option key={g.id} value={g.id}>
-                      {g.title} {g.target_count ? `(${g.achieved_count}/${g.target_count})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            return (
+              <li key={it.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 10, display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={it.done}
+                      onChange={e => onToggle(it.id, e.target.checked)}
+                    />
+                    <span style={{ textDecoration: it.done ? "line-through" : "none", fontWeight: 600 }}>
+                      {it.title}
+                      {failed && !it.done && (
+                        <span style={{ marginLeft: 8, fontSize: 12, color: "#ef4444" }}>
+                          (실패)
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                  <button onClick={() => onDelete(it.id)} style={{ fontSize: 12 }}>삭제</button>
+                </div>
 
-              {/* 메타 표시: 마감/반복 */}
-              <div style={{ display: "flex", gap: 12, fontSize: 12, color: "#6b7280" }}>
-                {it.due_date && <span>마감: {it.due_date}</span>}
-                {it.repeat_mask ? <span>반복: {prettyRepeat(it.repeat_mask)}</span> : null}
-              </div>
-            </li>
-          ))}
+                {/* 목표 선택 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>목표:</span>
+                  <select
+                    value={it.goal_id ?? ""}
+                    onChange={e => onAssignGoal(it.id, e.target.value)}
+                    style={{ padding: "4px 6px", borderRadius: 6 }}
+                  >
+                    <option value="">(연결 안 함)</option>
+                    {goals.map(g => (
+                      <option key={g.id} value={g.id}>
+                        {g.title} {g.target_count ? `(${g.achieved_count}/${g.target_count})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 메타 표시: 마감/반복/남은시간 */}
+                <div style={{ display: "flex", gap: 12, fontSize: 12, color: "#6b7280", alignItems: "baseline" }}>
+                  {it.due_date && (
+                    <>
+                      <span>마감: {it.due_date} 23:59</span>
+                      <span style={timeStyle}>
+                        {dueInfo!.text}
+                      </span>
+                    </>
+                  )}
+                  {it.repeat_mask ? <span>반복: {prettyRepeat(it.repeat_mask)}</span> : null}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
