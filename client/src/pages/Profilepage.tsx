@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../utils/supabase";
 import { fetchMyProfile } from "../utils/profileDb";
 import type { Profile } from "../types";
+import LogoutButton from "../components/LogoutButton";
 
 /** XP → 진행도(0~100)와 레벨/현재레벨내 XP 계산 */
 function xpMetrics(xpRaw: number | null | undefined) {
@@ -18,45 +19,67 @@ export default function ProfilePage() {
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // 언마운트 안전 가드
+  const isMounted = useRef(true);
+
   async function load() {
     try {
       setRefreshing(true);
-      const { data: { user }, error } = await supabase.auth.getUser();
+
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
       if (error) throw error;
+
       if (!user) {
+        if (!isMounted.current) return;
         setErr("로그인이 필요합니다.");
         setProfile(null);
         return;
       }
+
       const p = await fetchMyProfile(user.id);
+      if (!isMounted.current) return;
+
       setProfile(p);
       setErr(null);
     } catch (e: any) {
+      if (!isMounted.current) return;
       setErr(e?.message ?? "프로필을 불러오지 못했습니다.");
     } finally {
+      if (!isMounted.current) return;
       setLoading(false);
       setRefreshing(false);
     }
   }
 
   useEffect(() => {
-    let mounted = true;
+    isMounted.current = true;
     (async () => {
       await load();
     })();
-    return () => { mounted = false; };
+    return () => {
+      isMounted.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) {
-    return <section style={{ padding: 16 }}><p>불러오는 중…</p></section>;
+    return (
+      <section style={{ padding: 16 }}>
+        <p>불러오는 중…</p>
+      </section>
+    );
   }
 
   if (err) {
     return (
       <section style={{ padding: 16 }}>
         <p style={{ color: "crimson" }}>{err}</p>
-        <button onClick={load} style={{ marginTop: 8 }}>다시 시도</button>
+        <button onClick={load} style={{ marginTop: 8 }}>
+          다시 시도
+        </button>
       </section>
     );
   }
@@ -64,7 +87,18 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <section style={{ padding: 16 }}>
-        <h2 style={{ marginBottom: 8 }}>내 프로필</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <h2 style={{ margin: 0 }}>내 프로필</h2>
+          <LogoutButton />
+        </div>
+
         <p>프로필이 아직 없습니다. (로그인 직후 자동 생성 설정을 확인해 주세요)</p>
         <button onClick={load} style={{ marginTop: 8 }} disabled={refreshing}>
           {refreshing ? "새로고침…" : "새로고침"}
@@ -82,10 +116,30 @@ export default function ProfilePage() {
         margin: "24px auto",
         padding: 16,
         border: "1px solid #eee",
-        borderRadius: 12
+        borderRadius: 12,
       }}
     >
-      <header style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
+      {/* 상단 액션 바: 제목 + 로그아웃 */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>내 프로필</h1>
+        <LogoutButton />
+      </div>
+
+      <header
+        style={{
+          display: "flex",
+          gap: 16,
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
         <img
           src={profile.avatarUrl ?? "https://placehold.co/96x96?text=No+Avatar"}
           alt="avatar"
@@ -94,19 +148,50 @@ export default function ProfilePage() {
           style={{ borderRadius: "50%", objectFit: "cover" }}
         />
         <div style={{ lineHeight: 1.6 }}>
-          <div><strong>표시 이름:</strong> {profile.displayName ?? "미설정"}</div>
-          <div><strong>아이디(닉):</strong> {profile.username ?? "미설정"}</div>
-          <div><strong>UID:</strong> {profile.id}</div>
-          {profile.createdAt && <div><strong>생성일:</strong> {new Date(profile.createdAt).toLocaleString()}</div>}
-          {profile.updatedAt && <div><strong>수정일:</strong> {new Date(profile.updatedAt).toLocaleString()}</div>}
+          <div>
+            <strong>표시 이름:</strong> {profile.displayName ?? "미설정"}
+          </div>
+          <div>
+            <strong>아이디(닉):</strong> {profile.username ?? "미설정"}
+          </div>
+          <div>
+            <strong>UID:</strong> {profile.id}
+          </div>
+          {profile.createdAt && (
+            <div>
+              <strong>생성일:</strong>{" "}
+              {new Date(profile.createdAt).toLocaleString()}
+            </div>
+          )}
+          {profile.updatedAt && (
+            <div>
+              <strong>수정일:</strong>{" "}
+              {new Date(profile.updatedAt).toLocaleString()}
+            </div>
+          )}
         </div>
       </header>
 
       {/* XP / 레벨 카드 */}
-      <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 16, marginTop: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+      <div
+        style={{
+          border: "1px solid #eee",
+          borderRadius: 12,
+          padding: 16,
+          marginTop: 8,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 8,
+          }}
+        >
           <div style={{ fontWeight: 600, fontSize: 16 }}>Progress</div>
-          <div style={{ color: "#6b7280" }}>Lv.{level} · {xpInLevel}/100 XP (총 {xp} XP)</div>
+          <div style={{ color: "#6b7280" }}>
+            Lv.{level} · {xpInLevel}/100 XP (총 {xp} XP)
+          </div>
         </div>
 
         <div style={{ height: 10, background: "#f3f4f6", borderRadius: 999 }}>
@@ -116,7 +201,7 @@ export default function ProfilePage() {
               height: "100%",
               background: "#6366f1",
               borderRadius: 999,
-              transition: "width .25s"
+              transition: "width .25s",
             }}
           />
         </div>
