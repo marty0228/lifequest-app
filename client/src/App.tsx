@@ -4,7 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
 import Habits from "./pages/Calendar";
 import Settings from "./pages/Settings";
-import ProfilePage from "./pages/Profilepage";
+import ProfilePage from "./pages/ProfilePage";
 import GoalsPage from "./pages/Goals";
 
 export default function App() {
