@@ -2,6 +2,7 @@ export interface Task {
   id: string;
   title: string;
   completed: boolean;
+  failed?: boolean; //마감 날짜 경과 시 자동 실패 처리
   createdAt: string;  
   dueDate?: string;   
 }

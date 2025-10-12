@@ -38,7 +38,6 @@ function getMonthGrid(base: Date) {
 function getTasksOfDate(d: Date, tasks: TaskRow[], todayStr: string) {
   const dStr = ymd(d);
   const isPast = dStr < todayStr;
-  const isTodayOrFuture = dStr >= todayStr;
   const wBit = DAY_BITS[mondayIndex(d)];
 
   return tasks.filter((t) => {
