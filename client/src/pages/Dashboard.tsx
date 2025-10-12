@@ -236,7 +236,7 @@ function TaskRow({
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600, textDecoration: t.completed ? "line-through" : "none" }}>
           {t.title}
-          {overdue && <span style={{ marginLeft: 8, fontSize: 12, color: "#ef4444" }}>(마감 지남)</span>}
+          {overdue && <span style={{ marginLeft: 8, fontSize: 12, color: "#ef4444" }}>(실패)</span>}
         </div>
         <div style={{ fontSize: 12, color: "#6b7280" }}>
           생성: {new Date(t.createdAt).toLocaleString()}
