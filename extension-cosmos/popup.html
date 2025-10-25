@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { width: 340px; font: 13px/1.4 sans-serif; padding: 10px; }
+      .list { max-height: 260px; overflow: auto; border: 1px solid #eee; padding: 6px; }
+      .item { border-bottom: 1px solid #f1f1f1; padding: 6px 0; }
+      .title { font-weight: 600; }
+      .meta { color: #6b7280; font-size: 12px; }
+      button { margin-right: 6px; }
+    </style>
+  </head>
+  <body>
+    <h3>Cosmos 과제</h3>
+    <div>
+      <button id="refresh">현재 탭에서 다시 수집</button>
+      <button id="download">JSON 다운로드</button>
+      <button id="import">앱으로 가져가기</button>
+    </div>
+    <p id="info" class="meta"></p>
+    <div class="list" id="list"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
