@@ -1,6 +1,8 @@
+// client/src/pages/calender.tsx
 import { useEffect, useMemo, useState } from "react";
 import type { TaskRow } from "../types";
 import { listMyTasks, toggleTask } from "../utils/tasksDb";
+import { useAuth } from "../hooks/useAuth";
 
 // 로컬 타임존 기준 YYYY-MM-DD
 const ymd = (d: Date) => {
@@ -66,6 +68,7 @@ function getTasksOfDate(d: Date, tasks: TaskRow[], todayStr: string) {
 }
 
 export default function Calendar() {
+  const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -77,17 +80,28 @@ export default function Calendar() {
   const [selected, setSelected] = useState<string | null>(todayStr); // 기본 오늘
 
   useEffect(() => {
+    // 🔐 인증 가드: 로그인 정보 로딩 중이면 대기
+    if (authLoading) return;
+
+    // 🔐 비로그인 상태면 API 호출하지 않음(로그인 화면에서 fail to fetch 방지)
+    if (!user) {
+      setTasks([]);
+      setLoading(false);
+      return;
+    }
+
+    // 로그인 상태에서만 목록 호출
     (async () => {
       try {
         const list = await listMyTasks();
         setTasks(list);
       } catch (e: any) {
-        setErr(e.message ?? "작업 목록을 불러오지 못했습니다.");
+        setErr(e?.message ?? "작업 목록을 불러오지 못했습니다.");
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [user, authLoading]);
 
   const grid = useMemo(() => getMonthGrid(month), [month]);
   const monthLabel = `${month.getFullYear()}년 ${month.getMonth() + 1}월`;
@@ -107,7 +121,7 @@ export default function Calendar() {
       const row = await toggleTask(id, next);
       setTasks((prev) => prev.map((t) => (t.id === id ? row : t)));
     } catch (e: any) {
-      setErr(e.message ?? "상태 변경 실패");
+      setErr(e?.message ?? "상태 변경 실패");
     }
   };
 
@@ -121,7 +135,8 @@ export default function Calendar() {
     });
   }, [selected, tasks, todayStr]);
 
-  if (loading) return <section><p>불러오는 중…</p></section>;
+  if (authLoading || loading) return <section><p>불러오는 중…</p></section>;
+  if (!user) return <section><p style={{ color: "#6b7280" }}>로그인 후 캘린더를 이용하세요.</p></section>;
   if (err) return <section><p style={{ color: "crimson" }}>{err}</p></section>;
 
   return (
