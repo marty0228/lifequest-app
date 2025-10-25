@@ -1,53 +1,48 @@
 // client/src/hooks/useAuth.ts
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../utils/supabase";
 
-type SupaUser = NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]>;
+type SupaUser = NonNullable<
+  Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]
+>;
 
 export function useAuth() {
   const [user, setUser] = useState<SupaUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 중복 초기화/중복 구독 방지
-  const inited = useRef(false);
-
   useEffect(() => {
-    if (inited.current) return;
-    inited.current = true;
+    let cancelled = false;
 
-    let mounted = true;
-
-    // ✅ getSession이 지연/실패해도 최대 3초 내로 loading을 내리도록 타임아웃 처리
+    // 최대 3초 안에 loading을 반드시 내리도록 타임아웃
     const timeoutMs = 3000;
-    const sessionPromise = (async () => {
-      try {
-        const { data } = await supabase.auth.getSession(); // 로컬 세션 조회(네트워크 불필요)
-        return data.session?.user ?? null;
-      } catch {
-        return null; // 실패해도 일단 비로그인으로 진입
-      }
-    })();
-
-    const timer = new Promise<null>((resolve) =>
+    const timeout = new Promise<null>((resolve) =>
       setTimeout(() => resolve(null), timeoutMs)
     );
 
-    (async () => {
-      // getSession vs 타이머 중 먼저 끝나는 쪽을 채택
-      const u = (await Promise.race([sessionPromise, timer])) as SupaUser | null;
-      if (!mounted) return;
-      setUser(u);
-      setLoading(false);
+    const init = (async () => {
+      try {
+        // getSession은 로컬 스토리지 기반이라 네트워크 불필요. 실패시 null.
+        const { data } = await supabase.auth.getSession();
+        if (!cancelled) setUser(data.session?.user ?? null);
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
 
+    // 타임아웃과 경합: 어떤 게 먼저 끝나도 loading은 내려감
+    Promise.race([init, timeout]).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    // 상태 변경 구독 (StrictMode에서도 안전: 이 이펙트는 cleanup 후 재실행됨)
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
-      setUser(session?.user ?? null);
+      if (!cancelled) setUser(session?.user ?? null);
     });
 
     return () => {
-      mounted = false;
-      // 안전하게 구독 해제
+      cancelled = true;
       try {
         sub.subscription.unsubscribe();
       } catch {}
