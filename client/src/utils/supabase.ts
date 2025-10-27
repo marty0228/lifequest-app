@@ -1,12 +1,19 @@
 // client/src/utils/supabase.ts
 import { createClient } from "@supabase/supabase-js";
 
+console.log("VITE_SUPABASE_URL =", import.meta.env.VITE_SUPABASE_URL);
+console.log("VITE_SUPABASE_ANON_KEY =", import.meta.env.VITE_SUPABASE_ANON_KEY?.slice(0, 10) + "...");
+
 /** 숨은 문자/따옴표/트레일링 슬래시 정리 */
 function sanitizeEnvUrl(raw?: string): string {
   if (!raw) return "";
   let s = raw.trim();
   // 따옴표/백틱 제거
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")) || (s.startsWith("`") && s.endsWith("`"))) {
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'")) ||
+    (s.startsWith("`") && s.endsWith("`"))
+  ) {
     s = s.slice(1, -1);
   }
   // Zero-width / BOM 등 제거
@@ -21,7 +28,11 @@ function sanitizeEnvUrl(raw?: string): string {
 function sanitizeEnvKey(raw?: string): string {
   if (!raw) return "";
   let s = raw.trim();
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")) || (s.startsWith("`") && s.endsWith("`"))) {
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'")) ||
+    (s.startsWith("`") && s.endsWith("`"))
+  ) {
     s = s.slice(1, -1);
   }
   s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
@@ -35,7 +46,7 @@ const url = sanitizeEnvUrl(rawUrl);
 const anon = sanitizeEnvKey(rawKey);
 
 // 최소 형태 검사 (오타/스페이스 방지)
-const urlOk = /^https:\/\/[a-z0-9]{20,}\.supabase\.co$/i.test(url);
+const urlOk = /^https:\/\/[a-z0-9-]{20,}\.supabase\.co$/i.test(url);
 if (!urlOk || !anon) {
   const msg = [
     "[Supabase ENV 오류]",
@@ -48,17 +59,27 @@ if (!urlOk || !anon) {
   throw new Error(msg);
 }
 
-/** createClient 전에 fetch를 한 번 강제 확인(동기적 throw 방지) */
+/** createClient 전에 fetch를 한 번 강제 확인(동기적 throw 방지)
+ *  → 여기서 apikey/Authorization 헤더가 반드시 포함되어야 함
+ */
 export async function assertSupabaseReachable(): Promise<void> {
   const healthUrl = `${url}/auth/v1/health`;
-  const res = await fetch(healthUrl, { method: "GET" });
+  const res = await fetch(healthUrl, {
+    method: "GET",
+    headers: {
+      apikey: anon,
+      Authorization: `Bearer ${anon}`,
+    },
+  });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`[Supabase 연결 실패] ${res.status} ${res.statusText} - ${txt}`);
   }
 }
 
-// 필요하다면 커스텀 fetch 주입 가능(여기선 기본 fetch 사용)
+/** 필요하다면 커스텀 fetch 주입 가능(여기선 기본 fetch 사용)
+ *  → global.headers에 apikey/Authorization 추가해서 확실히 헤더가 실리도록 보강
+ */
 export const supabase = createClient(url, anon, {
   auth: {
     persistSession: true,
@@ -66,6 +87,20 @@ export const supabase = createClient(url, anon, {
     storageKey: "lifequest.auth",
   },
   global: {
-    headers: { "x-client-app": "lifequest" },
+    headers: {
+      apikey: anon,
+      Authorization: `Bearer ${anon}`,
+      "x-client-app": "lifequest",
+    },
   },
 });
+
+console.log("[Supabase] Initialized with:", {
+  url,
+  anonPreview: anon.slice(0, 10) + "...",
+});
+
+if (typeof window !== "undefined") {
+  // @ts-ignore
+  window.assertSupabaseReachable = assertSupabaseReachable;
+}
