@@ -1,106 +1,51 @@
 // client/src/utils/supabase.ts
 import { createClient } from "@supabase/supabase-js";
 
-console.log("VITE_SUPABASE_URL =", import.meta.env.VITE_SUPABASE_URL);
-console.log("VITE_SUPABASE_ANON_KEY =", import.meta.env.VITE_SUPABASE_ANON_KEY?.slice(0, 10) + "...");
+const RAW_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const RAW_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-/** 숨은 문자/따옴표/트레일링 슬래시 정리 */
-function sanitizeEnvUrl(raw?: string): string {
-  if (!raw) return "";
-  let s = raw.trim();
-  // 따옴표/백틱 제거
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'")) ||
-    (s.startsWith("`") && s.endsWith("`"))
-  ) {
-    s = s.slice(1, -1);
-  }
-  // Zero-width / BOM 등 제거
-  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
-  // 공백 제거
-  s = s.replace(/\s+/g, "");
-  // 끝 슬래시 제거
-  s = s.replace(/\/+$/, "");
-  return s;
+// 약간의 정리
+const url = (RAW_URL ?? "").trim().replace(/\/+$/, "");
+const anon = (RAW_KEY ?? "").trim();
+
+if (!url || !anon) {
+  console.warn(
+    "[Supabase ENV 경고] VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY가 비어 있습니다. " +
+    ".env.local을 확인하고 개발 서버를 재시작하세요."
+  );
 }
 
-function sanitizeEnvKey(raw?: string): string {
-  if (!raw) return "";
-  let s = raw.trim();
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'")) ||
-    (s.startsWith("`") && s.endsWith("`"))
-  ) {
-    s = s.slice(1, -1);
-  }
-  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
-  return s;
-}
+// 절대 global.headers.Authorization = Bearer <anon> 같은 건 넣지 마세요.
+// (로그인 토큰을 덮어써서 RLS가 전부 막힙니다.)
+export const supabase = createClient(url || "https://example.supabase.co", anon || "anon", {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: "lifequest.auth",
+  },
+});
 
-const rawUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// 개발 편의: 콘솔 디버깅
+if (import.meta.env.DEV) (window as any).supabase = supabase;
 
-const url = sanitizeEnvUrl(rawUrl);
-const anon = sanitizeEnvKey(rawKey);
-
-// 최소 형태 검사 (오타/스페이스 방지)
-const urlOk = /^https:\/\/[a-z0-9-]{20,}\.supabase\.co$/i.test(url);
-if (!urlOk || !anon) {
-  const msg = [
-    "[Supabase ENV 오류]",
-    `VITE_SUPABASE_URL: ${String(rawUrl)}`,
-    `정규식 검사 통과 여부: ${urlOk}`,
-    "예시: https://<project-ref>.supabase.co",
-    "VITE_SUPABASE_ANON_KEY: (생략)",
-  ].join("\n");
-  console.error(msg);
-  throw new Error(msg);
-}
-
-/** createClient 전에 fetch를 한 번 강제 확인(동기적 throw 방지)
- *  → 여기서 apikey/Authorization 헤더가 반드시 포함되어야 함
- */
+/** ✅ 호환용: AuthPanel.tsx 등에서 임포트하는 헬스체크 함수 */
 export async function assertSupabaseReachable(): Promise<void> {
+  if (!url || !anon) {
+    throw new Error("Supabase ENV가 비어 있습니다. .env.local을 확인하세요.");
+  }
   const healthUrl = `${url}/auth/v1/health`;
   const res = await fetch(healthUrl, {
     method: "GET",
     headers: {
-      apikey: anon,
-      Authorization: `Bearer ${anon}`,
+      apikey: anon,             // Authorization 헤더는 절대 강제하지 않음
     },
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`[Supabase 연결 실패] ${res.status} ${res.statusText} - ${txt}`);
   }
+  // OK면 아무 것도 하지 않음
 }
 
-/** 필요하다면 커스텀 fetch 주입 가능(여기선 기본 fetch 사용)
- *  → global.headers에 apikey/Authorization 추가해서 확실히 헤더가 실리도록 보강
- */
-export const supabase = createClient(url, anon, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    storageKey: "lifequest.auth",
-  },
-  global: {
-    headers: {
-      apikey: anon,
-      Authorization: `Bearer ${anon}`,
-      "x-client-app": "lifequest",
-    },
-  },
-});
-
-console.log("[Supabase] Initialized with:", {
-  url,
-  anonPreview: anon.slice(0, 10) + "...",
-});
-
-if (typeof window !== "undefined") {
-  // @ts-ignore
-  window.assertSupabaseReachable = assertSupabaseReachable;
-}
+console.log("[Supabase] url:", url ? url : "(EMPTY)", " anon:", anon ? (anon.slice(0,10)+"…") : "(EMPTY)");

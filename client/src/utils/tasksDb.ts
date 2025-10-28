@@ -1,53 +1,61 @@
 // client/src/utils/tasksDb.ts
-// fetch/자체 백엔드 호출 없이, Supabase JS로만 DB 접근합니다.
-// 이렇게 하면 CORS/프록시/프리플라이트 이슈가 사라집니다.
-
 import { supabase } from "./supabase";
-import type { AddTaskOpts, TaskRow } from "../types";
+import type { TaskRow } from "../types";
 
-/** 현재 로그인 사용자 ID를 안전하게 얻기 */
-async function getUserIdOrThrow(): Promise<string> {
-  const { data, error } = await supabase.auth.getUser();
+/** (내부) 로그인 확인만, userId는 굳이 읽지 않아도 됨 */
+async function assertAuthed(): Promise<void> {
+  const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
-  const uid = data.user?.id;
-  if (!uid) throw new Error("로그인이 필요합니다.");
-  return uid;
+  if (!data.session) throw new Error("로그인이 필요합니다.");
 }
 
 /** 내 작업 목록 */
 export async function listMyTasks(): Promise<TaskRow[]> {
-  // RLS가 켜져 있으면 user_id 조건 없이도 내 것만 조회됩니다.
+  await assertAuthed();
   const { data, error } = await supabase
     .from("tasks")
     .select("*")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  // created_at/due_date가 문자열로 오지 않으면 문자열로 보정(안전)
-  return (data ?? []).map((r) => ({
-    ...r,
-    created_at: r.created_at ?? null,
-    updated_at: r.updated_at ?? null,
-    due_date: r.due_date ?? null,
-  })) as TaskRow[];
+  return (data ?? []) as TaskRow[];
 }
 
-/** 작업 추가 */
-export async function addTask(title: string, opts: AddTaskOpts = {}): Promise<TaskRow> {
-  const uid = await getUserIdOrThrow();
+/** 작업 추가 — 두 형태 모두 지원:
+ *  addTask(title, due, repeatMask?)
+ *  addTask(title, { due_date, repeat_mask, note, goal_id })
+ */
+export async function addTask(
+  title: string,
+  arg2?: string | null | { due_date?: string | null; repeat_mask?: number | null; note?: string | null; goal_id?: string | null },
+  arg3?: number | null
+): Promise<TaskRow> {
+  await assertAuthed();
 
-  const payload = {
-    user_id: uid,
-    title,
-    note: opts.note ?? null,
-    due_date: opts.due_date ?? null,
-    repeat_mask: opts.repeat_mask ?? null,
-    goal_id: opts.goal_id ?? null,
-    done: false,
-  };
+  let due: string | null = null;
+  let repeat: number | null = null;
+  let note: string | null = null;
+  let goal: string | null = null;
 
+  if (typeof arg2 === "string" || arg2 === null || arg2 === undefined) {
+    due = (arg2 ?? null) as any;
+    repeat = (arg3 ?? null) as any;
+  } else if (typeof arg2 === "object") {
+    due = arg2.due_date ?? null;
+    repeat = arg2.repeat_mask ?? null;
+    note = arg2.note ?? null;
+    goal = arg2.goal_id ?? null;
+  }
+
+  const payload: any = { title };
+  if (due !== null) payload.due_date = due;           // YYYY-MM-DD 문자열
+  if (repeat !== null && repeat !== 0) payload.repeat_mask = repeat;
+  if (note !== null) payload.note = note;
+  if (goal !== null) payload.goal_id = goal;
+
+  // ⚠️ user_id는 보내지 않음 → DB가 auth.uid()로 자동 채움
   const { data, error } = await supabase
     .from("tasks")
-    .insert(payload)
+    .insert([payload])
     .select("*")
     .single();
 
@@ -57,32 +65,29 @@ export async function addTask(title: string, opts: AddTaskOpts = {}): Promise<Ta
 
 /** 완료 토글 */
 export async function toggleTask(id: string, nextDone: boolean): Promise<TaskRow> {
-  await getUserIdOrThrow(); // 로그인 확인
-
+  await assertAuthed();
   const { data, error } = await supabase
     .from("tasks")
     .update({ done: nextDone })
     .eq("id", id)
     .select("*")
     .single();
-
   if (error) throw error;
   return data as TaskRow;
 }
 
-/** 제목/마감 등 업데이트(부분 업데이트) */
+/** 부분 업데이트 */
 export async function updateTask(
   id: string,
   fields: Partial<Pick<TaskRow, "title" | "note" | "due_date" | "repeat_mask" | "goal_id" | "done">>
 ): Promise<TaskRow> {
-  await getUserIdOrThrow();
-
+  await assertAuthed();
   const patch: Record<string, unknown> = {};
   if (typeof fields.title === "string") patch.title = fields.title;
   if (fields.note !== undefined) patch.note = fields.note;
-  if (fields.due_date !== undefined) patch.due_date = fields.due_date; // null 허용
-  if (fields.repeat_mask !== undefined) patch.repeat_mask = fields.repeat_mask; // null 허용
-  if (fields.goal_id !== undefined) patch.goal_id = fields.goal_id; // null 허용
+  if (fields.due_date !== undefined) patch.due_date = fields.due_date;
+  if (fields.repeat_mask !== undefined) patch.repeat_mask = fields.repeat_mask;
+  if (fields.goal_id !== undefined) patch.goal_id = fields.goal_id;
   if (typeof fields.done === "boolean") patch.done = fields.done;
 
   const { data, error } = await supabase
@@ -91,14 +96,13 @@ export async function updateTask(
     .eq("id", id)
     .select("*")
     .single();
-
   if (error) throw error;
   return data as TaskRow;
 }
 
 /** 삭제 */
 export async function removeTask(id: string): Promise<void> {
-  await getUserIdOrThrow();
+  await assertAuthed();
   const { error } = await supabase.from("tasks").delete().eq("id", id);
   if (error) throw error;
 }
