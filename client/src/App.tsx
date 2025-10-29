@@ -5,6 +5,7 @@ import Tasks from "./pages/Tasks";
 import CalendarPage from "./pages/Calendar";
 import ProfilePage from "./pages/ProfilePage";
 import GoalsPage from "./pages/Goals";
+import TimetablePage from './pages/TimetablePage';
 
 export default function App() {
   return (
@@ -20,6 +21,9 @@ export default function App() {
         {/* 레거시 경로 처리 */}
         <Route path="habits" element={<Navigate to="/calendar" replace />} />
         <Route path="settings" element={<Navigate to="/dashboard" replace />} />
+        
+        {/* 시간표 탭 추가 */}
+        <Route path="timetable" element={<TimetablePage />} />
 
         <Route path="*" element={<div>Not Found</div>} />
       </Route>

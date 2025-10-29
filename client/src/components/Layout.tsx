@@ -25,31 +25,58 @@ export default function Layout() {
           대시보드
         </NavLink>
 
-        <NavLink to="/tasks" style={({ isActive }) => ({
-          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
-        })}>
+        <NavLink
+          to="/tasks"
+          style={({ isActive }) => ({
+            color: isActive ? "#4f46e5" : "#6366f1",
+            fontWeight: isActive ? 700 : 500,
+          })}
+        >
           할 일
         </NavLink>
 
-        <NavLink to="/goals" style={({ isActive }) => ({
-          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
-        })}>
+        <NavLink
+          to="/goals"
+          style={({ isActive }) => ({
+            color: isActive ? "#4f46e5" : "#6366f1",
+            fontWeight: isActive ? 700 : 500,
+          })}
+        >
           목표
         </NavLink>
 
+        {/* ⬇️ 시간표 항목 추가 */}
+        <NavLink
+          to="/timetable"
+          style={({ isActive }) => ({
+            color: isActive ? "#4f46e5" : "#6366f1",
+            fontWeight: isActive ? 700 : 500,
+          })}
+        >
+          시간표
+        </NavLink>
+
         {/* ✅ 습관 → 캘린더로 변경 */}
-        <NavLink to="/calendar" style={({ isActive }) => ({
-          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
-        })}>
+        <NavLink
+          to="/calendar"
+          style={({ isActive }) => ({
+            color: isActive ? "#4f46e5" : "#6366f1",
+            fontWeight: isActive ? 700 : 500,
+          })}
+        >
           캘린더
         </NavLink>
 
         {/* ❌ 설정 숨김 (메뉴에서 제거) */}
         {/* <NavLink to="/settings">설정</NavLink> */}
 
-        <NavLink to="/me" style={({ isActive }) => ({
-          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
-        })}>
+        <NavLink
+          to="/me"
+          style={({ isActive }) => ({
+            color: isActive ? "#4f46e5" : "#6366f1",
+            fontWeight: isActive ? 700 : 500,
+          })}
+        >
           내 프로필
         </NavLink>
       </nav>
