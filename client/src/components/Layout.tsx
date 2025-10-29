@@ -14,12 +14,44 @@ export default function Layout() {
           gap: "1rem",
         }}
       >
-        <NavLink to="/dashboard">대시보드</NavLink>
-        <NavLink to="/tasks">할 일</NavLink>
-        <NavLink to="/goals">목표</NavLink>
-        <NavLink to="/habits">습관</NavLink>
-        <NavLink to="/settings">설정</NavLink>
-        <NavLink to="/me">내 프로필</NavLink>
+        <NavLink
+          to="/dashboard"
+          end
+          style={({ isActive }) => ({
+            color: isActive ? "#4f46e5" : "#6366f1",
+            fontWeight: isActive ? 700 : 500,
+          })}
+        >
+          대시보드
+        </NavLink>
+
+        <NavLink to="/tasks" style={({ isActive }) => ({
+          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
+        })}>
+          할 일
+        </NavLink>
+
+        <NavLink to="/goals" style={({ isActive }) => ({
+          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
+        })}>
+          목표
+        </NavLink>
+
+        {/* ✅ 습관 → 캘린더로 변경 */}
+        <NavLink to="/calendar" style={({ isActive }) => ({
+          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
+        })}>
+          캘린더
+        </NavLink>
+
+        {/* ❌ 설정 숨김 (메뉴에서 제거) */}
+        {/* <NavLink to="/settings">설정</NavLink> */}
+
+        <NavLink to="/me" style={({ isActive }) => ({
+          color: isActive ? "#4f46e5" : "#6366f1", fontWeight: isActive ? 700 : 500,
+        })}>
+          내 프로필
+        </NavLink>
       </nav>
 
       {/* 오른쪽 페이지 */}
