@@ -1,225 +1,207 @@
-// src/pages/TimetablePage.tsx
-import { useState } from 'react';
-import { v4 as uuid } from 'uuid';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Plus } from 'lucide-react';
+import { useState } from "react";
+import { v4 as uuid } from "uuid";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Select, SelectItem } from "../components/ui/select";
+import { Plus } from "lucide-react";
 
-export interface Course {
+type Course = {
   id: string;
   title: string;
   color: string;
-  day: number;
-  startTime: number; // 9 = 9:00, 9.5 = 9:30
-  endTime: number;
+  day: number;         // 0=월 ... 4=금
+  startTime: number;   // 9 = 09:00, 9.5 = 09:30
+  endTime: number;     // 10.5 = 10:30 ...
   location?: string;
-}
+};
 
-const DAYS = ['월', '화', '수', '목', '금'];
-const TIME_SLOTS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+const DAYS = ["월", "화", "수", "목", "금"];
+const START_HOUR = 9;
+const END_HOUR = 18;
+const STEP_MIN = 30;
+const ROWS = (END_HOUR - START_HOUR) * (60 / STEP_MIN); // 18
+const ROW_HEIGHT = 44;                                   // 30분 한 칸 높이
+const TIME_COL_WIDTH = 64;
+
 const COLORS = [
-  { name: '빨강', value: '#FF6B6B' },
-  { name: '청록', value: '#4ECDC4' },
-  { name: '파랑', value: '#5B8DEE' },
-  { name: '오렌지', value: '#FFA94D' },
-  { name: '보라', value: '#B197FC' },
-  { name: '초록', value: '#51CF66' },
-  { name: '핑크', value: '#FF6BCB' },
-  { name: '노랑', value: '#FFD93D' },
+  { name: "빨강", value: "#FF6B6B" },
+  { name: "청록", value: "#4ECDC4" },
+  { name: "파랑", value: "#5B8DEE" },
+  { name: "오렌지", value: "#FFA94D" },
+  { name: "보라", value: "#B197FC" },
+  { name: "초록", value: "#51CF66" },
+  { name: "핑크", value: "#FF6BCB" },
+  { name: "노랑", value: "#FFD93D" },
 ];
+
+// 시간(예: 9.5) -> 30분 슬롯 인덱스(정수)
+const toSlot = (t: number) => Math.round((t - START_HOUR) * 2);
+// 슬롯 -> 레이블(정각만 표시)
+const hourLabel = (rowIdx: number) => (rowIdx % 2 === 0 ? String(START_HOUR + rowIdx / 2) : "");
 
 const TimetablePage = () => {
   const [courses, setCourses] = useState<Course[]>([]);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [editing, setEditing] = useState<Course | null>(null);
 
-  const [formData, setFormData] = useState({
-    title: '',
+  const [form, setForm] = useState({
+    title: "",
     day: 0,
     startTime: 9,
     endTime: 10,
     color: COLORS[0].value,
-    location: '',
+    location: "",
   });
 
-  const openAddDialog = () => {
-    setEditingCourse(null);
-    setFormData({
-      title: '',
-      day: 0,
-      startTime: 9,
-      endTime: 10,
-      color: COLORS[0].value,
-      location: '',
-    });
-    setIsAddDialogOpen(true);
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ title: "", day: 0, startTime: 9, endTime: 10, color: COLORS[0].value, location: "" });
+    setIsOpen(true);
   };
 
-  const openEditDialog = (course: Course) => {
-    setEditingCourse(course);
-    setFormData({
-      title: course.title,
-      day: course.day,
-      startTime: course.startTime,
-      endTime: course.endTime,
-      color: course.color,
-      location: course.location || '',
+  const openEdit = (c: Course) => {
+    setEditing(c);
+    setForm({
+      title: c.title,
+      day: c.day,
+      startTime: c.startTime,
+      endTime: c.endTime,
+      color: c.color,
+      location: c.location ?? "",
     });
-    setIsAddDialogOpen(true);
+    setIsOpen(true);
   };
 
-  const handleSubmit = () => {
-    if (!formData.title.trim()) return;
+  const submit = () => {
+    if (!form.title.trim()) return;
 
-    const courseData: Course = {
-      id: editingCourse?.id || uuid(),
-      title: formData.title,
-      day: formData.day,
-      startTime: formData.startTime,
-      endTime: formData.endTime,
-      color: formData.color,
-      location: formData.location,
+    // 30분 단위로 강제 스냅(입력 실수 방지)
+    const s = Math.round(form.startTime * 2) / 2;
+    const e = Math.round(form.endTime * 2) / 2;
+
+    const payload: Course = {
+      id: editing?.id ?? uuid(),
+      title: form.title.trim(),
+      day: Number(form.day), // 혹시 문자열이 들어와도 숫자로 강제
+      startTime: s,
+      endTime: Math.max(e, s + 0.5), // 최소 30분
+      color: form.color,
+      location: form.location || undefined,
     };
 
-    if (editingCourse) {
-      setCourses(courses.map(course => course.id === editingCourse.id ? courseData : course));
-    } else {
-      setCourses([...courses, courseData]);
-    }
-
-    setIsAddDialogOpen(false);
+    setCourses((prev) => (editing ? prev.map((x) => (x.id === editing.id ? payload : x)) : [...prev, payload]));
+    setIsOpen(false);
   };
 
-  const handleDelete = () => {
-    if (editingCourse) {
-      setCourses(courses.filter(course => course.id !== editingCourse.id));
-      setIsAddDialogOpen(false);
-    }
-  };
-
-  const getCoursePosition = (course: Course) => {
-    const startRow = TIME_SLOTS.indexOf(Math.floor(course.startTime));
-    const duration = course.endTime - course.startTime;
-    const height = duration * 60; // Adjusting the height calculation to ensure space between courses
-    
-    return {
-      top: startRow * 60 + (course.startTime % 1) * 60,
-      height,
-    };
+  const remove = () => {
+    if (!editing) return;
+    setCourses((prev) => prev.filter((x) => x.id !== editing.id));
+    setIsOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl mb-1">시간표</h1>
-          </div>
-          <Button
-            onClick={openAddDialog}
-            className="bg-white text-indigo-600 hover:bg-indigo-50"
-            size="sm"
+    <div className="min-h-screen">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between p-6">
+        <h1 className="text-4xl font-extrabold tracking-tight">시간표</h1>
+        <Button onClick={openAdd} className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+          <Plus className="w-4 h-4 mr-1" />
+          수업 추가
+        </Button>
+      </div>
+
+      {/* 메인 그리드 */}
+      <div
+        className="mx-6 rounded-lg bg-white shadow ring-1 ring-black/5 overflow-hidden"
+        style={{
+          display: "grid",
+          gridTemplateColumns: `${TIME_COL_WIDTH}px repeat(5, 1fr)`,
+          gridTemplateRows: `40px repeat(${ROWS}, ${ROW_HEIGHT}px)`,
+          position: "relative",
+        }}
+      >
+        {/* 좌상단 빈칸 */}
+        <div className="border-b border-r border-gray-200 bg-gray-50" />
+
+        {/* 요일 헤더 */}
+        {DAYS.map((d, i) => (
+          <div
+            key={d}
+            className="border-b border-r border-gray-200 bg-gray-50 flex items-center justify-center text-sm font-medium text-gray-700"
+            style={{ gridColumn: i + 2, gridRow: 1 }}
           >
-            <Plus className="w-4 h-4 mr-1" />
-            수업 추가
-          </Button>
-        </div>
-      </div>
-
-      {/* Timetable Grid */}
-      <div className="p-4">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <div className="inline-block min-w-full">
-              {/* Days Header */}
-              <div className="flex border-b border-gray-200">
-                <div className="w-16 flex-shrink-0 bg-gray-50"></div>
-                {DAYS.map((day) => (
-                  <div
-                    key={day}
-                    className="flex-1 min-w-[80px] text-center py-3 bg-gray-50 border-l border-gray-200"
-                  >
-                    <span className="text-sm text-gray-700">{day}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Time Slots */}
-              <div className="relative">
-                <div className="flex">
-                  {/* Time Labels */}
-                  <div className="w-16 flex-shrink-0">
-                    {TIME_SLOTS.map((time) => (
-                      <div
-                        key={time}
-                        className="h-[60px] flex items-start justify-center pt-1 border-b border-gray-100"
-                      >
-                        <span className="text-xs text-gray-500">{time}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Day Columns */}
-                  {DAYS.map((day, dayIndex) => (
-                    <div
-                      key={day}
-                      className="flex-1 min-w-[80px] relative border-l border-gray-200"
-                    >
-                      {/* Hour Grid Lines */}
-                      {TIME_SLOTS.map((time) => (
-                        <div
-                          key={time}
-                          className="h-[60px] border-b border-gray-100"
-                        ></div>
-                      ))}
-
-                      {/* Course Blocks */}
-                      {courses
-                        .filter((course) => course.day === dayIndex)
-                        .map((course) => {
-                          const { top, height } = getCoursePosition(course);
-                          return (
-                            <div
-                              key={course.id}
-                              onClick={() => openEditDialog(course)}
-                              className="absolute left-1 right-1 rounded-md p-2 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden"
-                              style={{
-                                top: `${top}px`,
-                                height: `${height}px`,
-                                backgroundColor: course.color,
-                              }}
-                            >
-                              <div className="text-white text-xs leading-tight">
-                                <div className="break-words">{course.title}</div>
-                                {course.location && (
-                                  <div className="opacity-90 mt-1 text-[10px]">
-                                    {course.location}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            {d}
           </div>
-        </div>
+        ))}
+
+        {/* 시간 라벨 */}
+        {Array.from({ length: ROWS }).map((_, row) => (
+          <div
+            key={`time-${row}`}
+            className="border-b border-r border-gray-100 flex items-start justify-center pt-1 text-xs text-gray-500"
+            style={{ gridColumn: 1, gridRow: row + 2 }}
+          >
+            {hourLabel(row)}
+          </div>
+        ))}
+
+        {/* 기본 셀(격자선) */}
+        {DAYS.map((_, col) =>
+          Array.from({ length: ROWS }).map((__, row) => (
+            <div
+              key={`cell-${col}-${row}`}
+              className="border-b border-r border-gray-100"
+              style={{ gridColumn: col + 2, gridRow: row + 2 }}
+            />
+          ))
+        )}
+
+        {/* Day 컬럼별 오버레이(여기에 과목을 "행"으로 붙임) */}
+        {DAYS.map((_, dayIdx) => (
+          <div
+            key={`overlay-${dayIdx}`}
+            style={{
+              gridColumn: dayIdx + 2,
+              gridRow: `2 / ${2 + ROWS}`,
+              display: "grid",
+              gridTemplateRows: `repeat(${ROWS}, ${ROW_HEIGHT}px)`,
+              position: "relative",
+            }}
+          >
+            {courses
+              .filter((c) => Number(c.day) === dayIdx) // 👈 안전하게 숫자로 비교
+              .map((c) => {
+                const startSlot = Math.max(0, Math.min(ROWS, toSlot(c.startTime)));
+                const endSlot = Math.max(startSlot + 1, Math.min(ROWS, toSlot(c.endTime)));
+
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => openEdit(c)}
+                    className="rounded-md p-2 text-white text-xs cursor-pointer shadow-sm overflow-hidden"
+                    style={{
+                      gridRow: `${startSlot + 1} / ${endSlot + 1}`, // 👈 정확히 행 범위로 배치
+                      margin: "2px 4px",
+                      backgroundColor: c.color,
+                    }}
+                    title={`${c.title} • ${c.location ?? ""}`}
+                  >
+                    <div className="font-semibold leading-tight">{c.title}</div>
+                    {c.location && <div className="opacity-90 mt-1 text-[10px]">{c.location}</div>}
+                  </div>
+                );
+              })}
+          </div>
+        ))}
       </div>
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      {/* 추가/편집 다이얼로그 */}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {editingCourse ? '수업 편집' : '수업 추가'}
-            </DialogTitle>
+            <DialogTitle>{editing ? "수업 편집" : "수업 추가"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -227,8 +209,8 @@ const TimetablePage = () => {
               <Label htmlFor="title">과목명</Label>
               <Input
                 id="title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="예: 자료구조"
               />
             </div>
@@ -236,120 +218,93 @@ const TimetablePage = () => {
             <div>
               <Label htmlFor="day">요일</Label>
               <Select
-                value={formData.day.toString()}
-                onValueChange={(value) => setFormData({ ...formData, day: parseInt(value) })}
+                value={String(form.day)}
+                onValueChange={(v) => setForm({ ...form, day: parseInt(v, 10) })}
+                className="w-full"
               >
-                <SelectTrigger>
-                  <SelectValue>{DAYS[formData.day]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS.map((day, index) => (
-                    <SelectItem key={day} value={index.toString()}>
-                      {day}요일
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                {DAYS.map((d, i) => (
+                  <SelectItem key={d} value={String(i)}>
+                    {d}요일
+                  </SelectItem>
+                ))}
               </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="startTime">시작 시간</Label>
+                <Label htmlFor="start">시작 시간</Label>
                 <Select
-                  value={formData.startTime.toString()}
-                  onValueChange={(value) => setFormData({ ...formData, startTime: parseFloat(value) })}
+                  value={String(form.startTime)}
+                  onValueChange={(v) => setForm({ ...form, startTime: parseFloat(v) })}
+                  className="w-full"
                 >
-                  <SelectTrigger>
-                    <SelectValue>{formData.startTime}:00</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_SLOTS.map((time) => (
-                      <>
-                        <SelectItem key={time} value={time.toString()}>
-                          {time}:00
-                        </SelectItem>
-                        <SelectItem key={`${time}-30`} value={(time + 0.5).toString()}>
-                          {time}:30
-                        </SelectItem>
-                      </>
-                    ))}
-                  </SelectContent>
+                  {Array.from({ length: (END_HOUR - START_HOUR) * 2 + 1 }).map((_, i) => {
+                    const val = START_HOUR + i * 0.5;
+                    const label = Number.isInteger(val) ? `${val}:00` : `${Math.floor(val)}:30`;
+                    return (
+                      <SelectItem key={`s-${val}`} value={String(val)}>
+                        {label}
+                      </SelectItem>
+                    );
+                  })}
                 </Select>
               </div>
 
               <div>
-                <Label htmlFor="endTime">종료 시간</Label>
+                <Label htmlFor="end">종료 시간</Label>
                 <Select
-                  value={formData.endTime.toString()}
-                  onValueChange={(value) => setFormData({ ...formData, endTime: parseFloat(value) })}
+                  value={String(form.endTime)}
+                  onValueChange={(v) => setForm({ ...form, endTime: parseFloat(v) })}
+                  className="w-full"
                 >
-                  <SelectTrigger>
-                    <SelectValue>{formData.endTime}:00</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_SLOTS.map((time) => (
-                      <>
-                        <SelectItem key={time} value={time.toString()}>
-                          {time}:00
-                        </SelectItem>
-                        <SelectItem key={`${time}-30`} value={(time + 0.5).toString()}>
-                          {time}:30
-                        </SelectItem>
-                      </>
-                    ))}
-                    <SelectItem value="19">19:00</SelectItem>
-                    <SelectItem value="19.5">19:30</SelectItem>
-                    <SelectItem value="20">20:00</SelectItem>
-                  </SelectContent>
+                  {Array.from({ length: (END_HOUR - START_HOUR) * 2 + 1 }).map((_, i) => {
+                    const val = START_HOUR + i * 0.5;
+                    const label = Number.isInteger(val) ? `${val}:00` : `${Math.floor(val)}:30`;
+                    return (
+                      <SelectItem key={`e-${val}`} value={String(val)}>
+                        {label}
+                      </SelectItem>
+                    );
+                  })}
                 </Select>
               </div>
             </div>
 
             <div>
-              <Label htmlFor="location">강의실 (선택)</Label>
+              <Label htmlFor="location">강의실(선택)</Label>
               <Input
                 id="location"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
                 placeholder="예: 공학관 301호"
               />
             </div>
 
             <div>
               <Label>색상</Label>
-              <div className="grid grid-cols-4 gap-2 mt-2">
-                {COLORS.map((color) => (
+              <div className="grid grid-cols-8 gap-2 mt-2">
+                {COLORS.map((c) => (
                   <button
-                    key={color.value}
-                    onClick={() => setFormData({ ...formData, color: color.value })}
-                    className={`h-10 rounded-md border-2 transition-all ${
-                      formData.color === color.value
-                        ? 'border-gray-800 scale-105'
-                        : 'border-gray-200'
+                    key={c.value}
+                    onClick={() => setForm({ ...form, color: c.value })}
+                    className={`h-8 rounded-md border-2 ${
+                      form.color === c.value ? "border-gray-900" : "border-transparent"
                     }`}
-                    style={{ backgroundColor: color.value }}
-                  >
-                    <span className="sr-only">{color.name}</span>
-                  </button>
+                    style={{ backgroundColor: c.value }}
+                    title={c.name}
+                  />
                 ))}
               </div>
             </div>
 
-            <div className="flex gap-2 pt-4">
-              {editingCourse && (
-                <Button
-                  onClick={handleDelete}
-                  variant="destructive"
-                  className="flex-1"
-                >
+            <div className="flex gap-2 pt-2">
+              {editing && (
+                <Button onClick={remove} variant="destructive" className="flex-1">
                   삭제
                 </Button>
               )}
-              <Button
-                onClick={handleSubmit}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
-              >
-                {editingCourse ? '수정' : '추가'}
+              <Button onClick={submit} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white">
+                {editing ? "수정" : "추가"}
               </Button>
             </div>
           </div>
