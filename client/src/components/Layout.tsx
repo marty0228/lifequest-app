@@ -1,90 +1,91 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+
+const navItems = [
+  { to: "/dashboard", label: "홈", icon: "🏠" },
+  { to: "/tasks", label: "할 일", icon: "✅" },
+  { to: "/goals", label: "목표", icon: "🎯" },
+  { to: "/timetable", label: "시간표", icon: "📅" },
+  { to: "/calendar", label: "캘린더", icon: "📆" },
+  { to: "/me", label: "프로필", icon: "👤" },
+];
 
 export default function Layout() {
+  const location = useLocation();
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      {/* 왼쪽 메뉴바 */}
+    <div style={{ 
+      display: "flex", 
+      flexDirection: "column",
+      minHeight: "100vh",
+      background: "var(--color-bg)",
+    }}>
+      {/* 메인 콘텐츠 */}
+      <main style={{ 
+        flex: 1,
+        paddingBottom: "80px", // 하단 네비게이션 공간
+        overflowY: "auto",
+      }}>
+        <div style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "20px",
+        }}>
+          <Outlet />
+        </div>
+      </main>
+
+      {/* 하단 네비게이션 (모바일 우선) */}
       <nav
         style={{
-          width: "200px",
-          background: "#f5f5f5",
-          padding: "1rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: "var(--color-bg-card)",
+          borderTop: "1px solid var(--color-gray-200)",
+          display: "grid",
+          gridTemplateColumns: `repeat(${navItems.length}, 1fr)`,
+          padding: "8px 0",
+          boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.05)",
+          zIndex: 1000,
         }}
       >
-        <NavLink
-          to="/dashboard"
-          end
-          style={({ isActive }) => ({
-            color: isActive ? "#4f46e5" : "#6366f1",
-            fontWeight: isActive ? 700 : 500,
-          })}
-        >
-          대시보드
-        </NavLink>
-
-        <NavLink
-          to="/tasks"
-          style={({ isActive }) => ({
-            color: isActive ? "#4f46e5" : "#6366f1",
-            fontWeight: isActive ? 700 : 500,
-          })}
-        >
-          할 일
-        </NavLink>
-
-        <NavLink
-          to="/goals"
-          style={({ isActive }) => ({
-            color: isActive ? "#4f46e5" : "#6366f1",
-            fontWeight: isActive ? 700 : 500,
-          })}
-        >
-          목표
-        </NavLink>
-
-        {/* ⬇️ 시간표 항목 추가 */}
-        <NavLink
-          to="/timetable"
-          style={({ isActive }) => ({
-            color: isActive ? "#4f46e5" : "#6366f1",
-            fontWeight: isActive ? 700 : 500,
-          })}
-        >
-          시간표
-        </NavLink>
-
-        {/* ✅ 습관 → 캘린더로 변경 */}
-        <NavLink
-          to="/calendar"
-          style={({ isActive }) => ({
-            color: isActive ? "#4f46e5" : "#6366f1",
-            fontWeight: isActive ? 700 : 500,
-          })}
-        >
-          캘린더
-        </NavLink>
-
-        {/* ❌ 설정 숨김 (메뉴에서 제거) */}
-        {/* <NavLink to="/settings">설정</NavLink> */}
-
-        <NavLink
-          to="/me"
-          style={({ isActive }) => ({
-            color: isActive ? "#4f46e5" : "#6366f1",
-            fontWeight: isActive ? 700 : 500,
-          })}
-        >
-          내 프로필
-        </NavLink>
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.to;
+          
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                padding: "8px 4px",
+                textDecoration: "none",
+                transition: "all 0.2s",
+                color: isActive ? "var(--color-primary)" : "var(--color-text-tertiary)",
+              }}
+            >
+              <span style={{ 
+                fontSize: "20px",
+                transform: isActive ? "scale(1.1)" : "scale(1)",
+                transition: "transform 0.2s",
+              }}>
+                {item.icon}
+              </span>
+              <span style={{ 
+                fontSize: "11px",
+                fontWeight: isActive ? 600 : 400,
+              }}>
+                {item.label}
+              </span>
+            </NavLink>
+          );
+        })}
       </nav>
-
-      {/* 오른쪽 페이지 */}
-      <main style={{ flex: 1, padding: "1rem" }}>
-        <Outlet />
-      </main>
     </div>
   );
 }

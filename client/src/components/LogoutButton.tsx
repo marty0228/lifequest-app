@@ -12,9 +12,8 @@ export default function LogoutButton() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      // (선택) 앱 전역 캐시/스토어 정리
       sessionStorage.clear();
-      localStorage.removeItem("some-app-cache"); // 있으면 정리
+      localStorage.removeItem("some-app-cache");
 
       navigate("/login", { replace: true });
     } catch (e) {
@@ -29,11 +28,16 @@ export default function LogoutButton() {
     <button
       onClick={handleLogout}
       disabled={loading}
-      className="px-3 py-2 rounded-md border"
+      className="secondary"
+      style={{
+        padding: "8px 16px",
+        fontSize: 13,
+        fontWeight: 600,
+      }}
       aria-label="로그아웃"
       title="로그아웃"
     >
-      {loading ? "로그아웃 중..." : "로그아웃"}
+      {loading ? "🔄" : "🚪"} {loading ? "로그아웃 중..." : "로그아웃"}
     </button>
   );
 }

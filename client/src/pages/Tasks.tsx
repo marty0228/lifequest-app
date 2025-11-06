@@ -149,147 +149,292 @@ export default function Tasks() {
     }
   };
 
-  if (!authed) return <section><p>로그인이 필요합니다.</p></section>;
-  if (loading) return <section><p>불러오는 중…</p></section>;
+  if (!authed) {
+    return (
+      <div className="fade-in" style={{ textAlign: "center", padding: 60 }}>
+        <div style={{ fontSize: 64, marginBottom: 20 }}>🔒</div>
+        <h2 style={{ marginBottom: 12 }}>로그인이 필요합니다</h2>
+        <p style={{ color: "var(--color-text-tertiary)" }}>할 일을 관리하려면 먼저 로그인해주세요.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="fade-in" style={{ textAlign: "center", padding: 60 }}>
+        <div style={{ fontSize: 64, marginBottom: 20 }}>⏳</div>
+        <h2>불러오는 중…</h2>
+      </div>
+    );
+  }
 
   return (
-    <section style={{ maxWidth: 720, margin: "0 auto" }}>
-      <h2 style={{ marginBottom: 12 }}>할 일</h2>
+    <section className="fade-in" style={{ display: "grid", gap: 20 }}>
+      {/* 헤더 */}
+      <div className="card" style={{
+        background: "linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
+        color: "white",
+        padding: "32px 24px",
+      }}>
+        <h2 style={{ color: "white", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+          <span>✅</span>
+          <span>할 일 관리</span>
+        </h2>
+        <p style={{ color: "rgba(255, 255, 255, 0.9)", fontSize: 14 }}>
+          당신의 모든 할 일을 한 곳에서 관리하세요
+        </p>
+      </div>
 
-      {/* 입력 박스 */}
-      <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 8 }}>
+      {/* 입력 카드 */}
+      <div className="card">
+        <h3 style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          <span>➕</span>
+          <span>새 할 일 추가</span>
+        </h3>
+
+        <div style={{ display: "grid", gap: 12 }}>
+          {/* 제목 입력 */}
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
-            placeholder="할 일 입력"
-            style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
+            placeholder="무엇을 할까요?"
+            onKeyDown={e => e.key === "Enter" && onAdd()}
           />
-          <button onClick={() => setRepeatOpen(o => !o)} title="반복 설정">
-            반복
-          </button>
-          <button onClick={onAdd}>추가</button>
-        </div>
 
-        {/* 마감 날짜 */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <label style={{ fontSize: 13, color: "#6b7280" }}>마감일</label>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={e => setDueDate(e.target.value)}
-            style={{ padding: 6, border: "1px solid #ddd", borderRadius: 8 }}
-          />
-          {repeatMask ? (
-            <span style={{ fontSize: 12, color: "#6b7280" }}>
-              반복: {prettyRepeat(repeatMask)}
-            </span>
-          ) : null}
-        </div>
-
-        {/* 반복 요일 토글 */}
-        {repeatOpen && (
-          <div style={{ display: "flex", gap: 6 }}>
-            {DAY_BITS.map((bit, i) => {
-              const active = maskHas(repeatMask, bit);
-              return (
-                <button
-                  key={bit}
-                  onClick={() => setRepeatMask(prev => toggleBit(prev, bit))}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
-                    background: active ? "#eef6ff" : "white",
-                    fontWeight: active ? 600 : 400
-                  }}
-                >
-                  {DAY_LABELS[i]}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setRepeatMask(0)}
-              style={{ marginLeft: 8, padding: "6px 10px", borderRadius: 8 }}
-              title="반복 해제"
+          {/* 마감일 & 반복 설정 버튼 */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              style={{ flex: "1 1 160px" }}
+            />
+            <button 
+              onClick={() => setRepeatOpen(o => !o)} 
+              className={repeatMask ? "secondary" : "ghost"}
+              style={{ flex: "0 0 auto" }}
             >
-              해제
+              🔄 반복 {repeatMask ? `(${prettyRepeat(repeatMask)})` : ""}
+            </button>
+            <button onClick={onAdd} style={{ flex: "0 0 auto" }}>
+              추가하기
             </button>
           </div>
-        )}
+
+          {/* 반복 요일 선택 */}
+          {repeatOpen && (
+            <div style={{ 
+              padding: 16,
+              background: "var(--color-gray-50)",
+              borderRadius: 12,
+              display: "grid",
+              gap: 12,
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                반복할 요일을 선택하세요
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {DAY_BITS.map((bit, i) => {
+                  const active = maskHas(repeatMask, bit);
+                  return (
+                    <button
+                      key={bit}
+                      onClick={() => setRepeatMask(prev => toggleBit(prev, bit))}
+                      className="secondary"
+                      style={{
+                        padding: "10px 16px",
+                        background: active ? "var(--color-primary)" : "white",
+                        color: active ? "white" : "var(--color-text-primary)",
+                        fontWeight: active ? 600 : 400,
+                        border: active ? "none" : "1.5px solid var(--color-gray-200)",
+                      }}
+                    >
+                      {DAY_LABELS[i]}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setRepeatMask(0)}
+                  className="ghost"
+                  style={{ marginLeft: "auto" }}
+                >
+                  초기화
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {err && <p style={{ color: "crimson" }}>{err}</p>}
+      {/* 에러 메시지 */}
+      {err && (
+        <div style={{
+          padding: 16,
+          background: "var(--color-danger)",
+          color: "white",
+          borderRadius: 12,
+          fontWeight: 500,
+        }}>
+          ⚠️ {err}
+        </div>
+      )}
 
-      {/* 목록 */}
-      {items.length === 0 ? (
-        <p>아직 할 일이 없어요.</p>
-      ) : (
-        <ul style={{ display: "grid", gap: 8, listStyle: "none", padding: 0 }}>
-          {items.map(it => {
-            const dueInfo = it.due_date ? dueRemainLabel(it.due_date, now) : null;
-            const failed = isFailedUI(it, now);
-            const timeStyle: React.CSSProperties = {
-              fontSize: 12,
-              color: dueInfo ? (dueInfo.urgent ? "#ef4444" : "#6b7280") : "#6b7280",
-              fontWeight: dueInfo?.urgent ? 600 : 400,
-            };
+      {/* 할 일 목록 */}
+      <div className="card">
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center",
+          marginBottom: 20,
+        }}>
+          <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>📋</span>
+            <span>할 일 목록</span>
+          </h3>
+          <span style={{
+            background: "var(--color-primary)",
+            color: "white",
+            fontSize: 13,
+            fontWeight: 600,
+            padding: "6px 12px",
+            borderRadius: 12,
+          }}>
+            {items.length}개
+          </span>
+        </div>
 
-            return (
-              <li key={it.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 10, display: "grid", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {items.length === 0 ? (
+          <div style={{ 
+            textAlign: "center", 
+            padding: 60,
+            color: "var(--color-text-tertiary)" 
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📝</div>
+            <div>아직 할 일이 없어요</div>
+            <div style={{ fontSize: 13, marginTop: 8 }}>위에서 새 할 일을 추가해보세요!</div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {items.map(it => {
+              const dueInfo = it.due_date ? dueRemainLabel(it.due_date, now) : null;
+              const failed = isFailedUI(it, now);
+
+              return (
+                <div 
+                  key={it.id} 
+                  className="card"
+                  style={{ 
+                    padding: 16,
+                    background: it.done ? "var(--color-gray-50)" : "white",
+                    border: failed && !it.done ? "1.5px solid var(--color-danger)" : undefined,
+                  }}
+                >
+                  {/* 상단: 체크박스 + 제목 + 삭제 */}
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "flex-start", 
+                    gap: 12,
+                    marginBottom: 12,
+                  }}>
                     <input
                       type="checkbox"
                       checked={it.done}
                       onChange={e => onToggle(it.id, e.target.checked)}
                     />
-                    <span style={{ textDecoration: it.done ? "line-through" : "none", fontWeight: 600 }}>
-                      {it.title}
-                      {failed && !it.done && (
-                        <span style={{ marginLeft: 8, fontSize: 12, color: "#ef4444" }}>
-                          (실패)
-                        </span>
-                      )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ 
+                        fontWeight: 600,
+                        fontSize: 15,
+                        textDecoration: it.done ? "line-through" : "none",
+                        color: it.done ? "var(--color-text-tertiary)" : "var(--color-text-primary)",
+                      }}>
+                        {it.title}
+                        {failed && !it.done && (
+                          <span style={{ 
+                            marginLeft: 8,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "white",
+                            background: "var(--color-danger)",
+                            padding: "2px 8px",
+                            borderRadius: 6,
+                          }}>
+                            실패
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onDelete(it.id)}
+                      className="ghost"
+                      style={{ 
+                        padding: "6px 10px",
+                        color: "var(--color-danger)",
+                        fontSize: 13,
+                      }}
+                    >
+                      삭제
+                    </button>
+                  </div>
+
+                  {/* 목표 연결 */}
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 10,
+                    marginBottom: 10,
+                  }}>
+                    <span style={{ 
+                      fontSize: 12, 
+                      fontWeight: 600,
+                      color: "var(--color-text-secondary)",
+                      minWidth: 50,
+                    }}>
+                      🎯 목표
                     </span>
-                  </label>
-                  <button onClick={() => onDelete(it.id)} style={{ fontSize: 12 }}>삭제</button>
-                </div>
+                    <select
+                      value={it.goal_id ?? ""}
+                      onChange={e => onAssignGoal(it.id, e.target.value)}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">(연결 안 함)</option>
+                      {goals.map(g => (
+                        <option key={g.id} value={g.id}>
+                          {g.title} {g.target_count ? `(${g.achieved_count}/${g.target_count})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                {/* 목표 선택 */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>목표:</span>
-                  <select
-                    value={it.goal_id ?? ""}
-                    onChange={e => onAssignGoal(it.id, e.target.value)}
-                    style={{ padding: "4px 6px", borderRadius: 6 }}
-                  >
-                    <option value="">(연결 안 함)</option>
-                    {goals.map(g => (
-                      <option key={g.id} value={g.id}>
-                        {g.title} {g.target_count ? `(${g.achieved_count}/${g.target_count})` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  {/* 메타 정보 */}
+                  <div style={{ 
+                    display: "flex", 
+                    gap: 16, 
+                    flexWrap: "wrap",
+                    fontSize: 12, 
+                    color: "var(--color-text-tertiary)" 
+                  }}>
+                    {it.due_date && (
+                      <>
+                        <span>📅 마감: {it.due_date} 23:59</span>
+                        <span style={{
+                          fontWeight: dueInfo?.urgent ? 600 : 400,
+                          color: dueInfo?.urgent ? "var(--color-danger)" : "var(--color-text-tertiary)",
+                        }}>
+                          ⏰ {dueInfo?.text}
+                        </span>
+                      </>
+                    )}
+                    {it.repeat_mask && (
+                      <span>🔄 {prettyRepeat(it.repeat_mask)}</span>
+                    )}
+                  </div>
                 </div>
-
-                {/* 메타 표시: 마감/반복/남은시간 */}
-                <div style={{ display: "flex", gap: 12, fontSize: 12, color: "#6b7280", alignItems: "baseline" }}>
-                  {it.due_date && (
-                    <>
-                      <span>마감: {it.due_date} 23:59</span>
-                      <span style={timeStyle}>
-                        {dueInfo!.text}
-                      </span>
-                    </>
-                  )}
-                  {it.repeat_mask ? <span>반복: {prettyRepeat(it.repeat_mask)}</span> : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

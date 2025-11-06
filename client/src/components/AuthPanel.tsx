@@ -12,9 +12,8 @@ export default function AuthPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [rawErr, setRawErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [authed, setAuthed] = useState<boolean | null>(null); // null: 미확인, true/false: 상태
+  const [authed, setAuthed] = useState<boolean | null>(null);
 
-  // 🔎 마운트 시 1회, ENV/네트워크 헬스체크 + 현재 세션 동기화
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -41,7 +40,6 @@ export default function AuthPanel() {
       }
     })();
 
-    // 로그인/로그아웃/토큰갱신 감지 → 상단 메시지/상태 동기화
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthed(!!session);
       if (session) {
@@ -112,25 +110,35 @@ export default function AuthPanel() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 420, color: "#111827" }}>
-      <div style={{ display: "flex", gap: 8 }}>
+    <div className="card" style={{ maxWidth: 480, margin: "20px auto" }}>
+      {/* 탭 */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button
           onClick={() => setMode("signin")}
-          disabled={mode === "signin"}
-          style={{ ...tabBtn, ...(mode === "signin" ? tabActive : {}) }}
+          className={mode === "signin" ? "" : "secondary"}
+          style={{ 
+            flex: 1,
+            background: mode === "signin" ? "var(--color-primary)" : "var(--color-gray-100)",
+            color: mode === "signin" ? "white" : "var(--color-text-primary)",
+          }}
         >
           로그인
         </button>
         <button
           onClick={() => setMode("signup")}
-          disabled={mode === "signup"}
-          style={{ ...tabBtn, ...(mode === "signup" ? tabActive : {}) }}
+          className={mode === "signup" ? "" : "secondary"}
+          style={{ 
+            flex: 1,
+            background: mode === "signup" ? "var(--color-primary)" : "var(--color-gray-100)",
+            color: mode === "signup" ? "white" : "var(--color-text-primary)",
+          }}
         >
           회원가입
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 8 }}>
+      {/* 폼 */}
+      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, marginBottom: 16 }}>
         <input
           type="email"
           placeholder="이메일"
@@ -138,63 +146,125 @@ export default function AuthPanel() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          style={input}
         />
         <input
           type="password"
-          placeholder="비밀번호"
+          placeholder="비밀번호 (6자 이상)"
           autoComplete={mode === "signin" ? "current-password" : "new-password"}
           value={pw}
           onChange={(e) => setPw(e.target.value)}
           required
-          style={input}
         />
-        <button type="submit" disabled={loading} style={primaryBtn}>
-          {loading ? "처리 중…" : mode === "signin" ? "로그인" : "가입하기"}
+        <button type="submit" disabled={loading}>
+          {loading ? "처리 중…" : mode === "signin" ? "🔑 로그인" : "✨ 가입하기"}
         </button>
       </form>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={handleSignOut} disabled={loading} style={ghostBtn}>
-          로그아웃
-        </button>
-      </div>
+      {/* 로그아웃 버튼 */}
+      <button 
+        onClick={handleSignOut} 
+        disabled={loading}
+        className="secondary"
+        style={{ width: "100%", marginBottom: 16 }}
+      >
+        🚪 로그아웃
+      </button>
 
-      {/* 상태 메시지/에러 */}
+      {/* 상태 표시 */}
       {authed !== null && (
-        <div style={{ fontSize: 12, color: authed ? "#16a34a" : "#6b7280" }}>
-          현재 상태: {authed ? "로그인됨" : "비로그인"}
-        </div>
-      )}
-      {msg && <div style={{ color: "#2563eb", fontSize: 13 }}>{msg}</div>}
-      {err && <div style={{ color: "#dc2626", fontSize: 13 }}>{err}</div>}
-      {rawErr && (
-        <div style={{ color: "#ef4444", fontSize: 12, wordBreak: "break-all" }}>
-          원본 오류: {rawErr}
+        <div style={{ 
+          padding: 12,
+          borderRadius: 10,
+          background: authed ? "var(--color-success)" : "var(--color-gray-100)",
+          color: authed ? "white" : "var(--color-text-secondary)",
+          fontSize: 13,
+          fontWeight: 600,
+          textAlign: "center",
+          marginBottom: 12,
+        }}>
+          {authed ? "✅ 로그인됨" : "❌ 비로그인"}
         </div>
       )}
 
-      <pre style={hintBox}>
-{`ENV 체크
-VITE_SUPABASE_URL: ${String(import.meta.env.VITE_SUPABASE_URL || "(없음)")}
+      {/* 메시지 */}
+      {msg && (
+        <div style={{ 
+          padding: 12,
+          borderRadius: 10,
+          background: "var(--color-primary)",
+          color: "white",
+          fontSize: 13,
+          marginBottom: 12,
+        }}>
+          ℹ️ {msg}
+        </div>
+      )}
+
+      {/* 에러 */}
+      {err && (
+        <div style={{ 
+          padding: 12,
+          borderRadius: 10,
+          background: "var(--color-danger)",
+          color: "white",
+          fontSize: 13,
+          marginBottom: 12,
+        }}>
+          ⚠️ {err}
+        </div>
+      )}
+
+      {/* 원본 에러 (디버깅용) */}
+      {rawErr && (
+        <details style={{ marginBottom: 12 }}>
+          <summary style={{ 
+            cursor: "pointer", 
+            fontSize: 12, 
+            color: "var(--color-text-tertiary)",
+            padding: 8,
+          }}>
+            원본 오류 보기
+          </summary>
+          <div style={{ 
+            marginTop: 8,
+            padding: 12,
+            background: "var(--color-gray-50)",
+            borderRadius: 8,
+            fontSize: 11,
+            color: "var(--color-danger)",
+            wordBreak: "break-all",
+            fontFamily: "monospace",
+          }}>
+            {rawErr}
+          </div>
+        </details>
+      )}
+
+      {/* ENV 정보 (디버깅용) */}
+      <details>
+        <summary style={{ 
+          cursor: "pointer", 
+          fontSize: 12, 
+          color: "var(--color-text-tertiary)",
+          padding: 8,
+        }}>
+          환경 설정 보기
+        </summary>
+        <pre style={{ 
+          marginTop: 8,
+          padding: 12,
+          background: "var(--color-gray-50)",
+          borderRadius: 8,
+          fontSize: 11,
+          color: "var(--color-text-secondary)",
+          whiteSpace: "pre-wrap",
+          fontFamily: "monospace",
+        }}>
+{`VITE_SUPABASE_URL: ${String(import.meta.env.VITE_SUPABASE_URL || "(없음)")}
 VITE_SUPABASE_ANON_KEY: ${import.meta.env.VITE_SUPABASE_ANON_KEY ? "(있음)" : "(없음)"}
 origin: ${window.location.origin}`}
-      </pre>
+        </pre>
+      </details>
     </div>
   );
 }
-
-/* styles */
-const tabBtn: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: 8,
-  border: "1px solid #e5e7eb",
-  background: "white",
-  color: "#111827",
-  cursor: "pointer",
-};
-const tabActive: React.CSSProperties = { background: "#eef2ff", borderColor: "#c7d2fe", color: "#111827" };
-const input: React.CSSProperties = { padding: "10px 12px", border: "1px solid #e5e7eb", borderRadius: 8, background: "white", color: "#111827" };
-const primaryBtn: React.CSSProperties = { padding: "10px 12px", borderRadius: 8, border: "1px solid #6366f1", background: "#6366f1", color: "white", cursor: "pointer", fontWeight: 600 };
-const ghostBtn: React.CSSProperties = { padding: "10px 12px", borderRadius: 8, border: "1px solid #e5e7eb", background: "white", color: "#111827", cursor: "pointer" };
-const hintBox: React.CSSProperties = { marginTop: 4, padding: 8, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, whiteSpace: "pre-wrap", color: "#111827" };
