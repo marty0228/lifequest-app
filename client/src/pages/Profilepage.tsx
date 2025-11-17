@@ -3,13 +3,15 @@ import { supabase } from "../utils/supabase";
 import { fetchMyProfile } from "../utils/profileDb";
 import type { Profile } from "../types";
 import LogoutButton from "../components/LogoutButton";
+import AchievementsSection from "../components/AchievementsSection";
+import { calculateAchievementProgress, checkAchievements } from "../utils/achievementUtils";
 
 /** XP → 진행도(0~100)와 레벨/현재레벨내 XP 계산 */
 function xpMetrics(xpRaw: number | null | undefined) {
   const xp = Math.max(0, xpRaw ?? 0);
-  const level = Math.floor(xp / 100) + 1;      // 0~99: 1레벨, 100~199: 2레벨, ...
-  const xpInLevel = xp % 100;                   // 현재 레벨 내 누적치 0~99
-  const progress = (xpInLevel / 100) * 100;     // 게이지 %
+  const level = Math.floor(xp / 100) + 1;
+  const xpInLevel = xp % 100;
+  const progress = (xpInLevel / 100) * 100;
   return { xp, level, xpInLevel, progress };
 }
 
@@ -19,7 +21,6 @@ export default function ProfilePage() {
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 언마운트 안전 가드
   const isMounted = useRef(true);
 
   async function load() {
@@ -105,6 +106,11 @@ export default function ProfilePage() {
   }
 
   const { xp, level, xpInLevel, progress } = xpMetrics(profile.xp);
+
+  // 업적 계산 (임시 퀘스트 데이터 - 실제로는 데이터베이스에서 가져와야 함)
+  const dummyQuests: any[] = [];
+  const achievementProgress = calculateAchievementProgress(dummyQuests, level);
+  const userAchievements = checkAchievements(achievementProgress);
 
   return (
     <section className="fade-in" style={{ display: "grid", gap: 20 }}>
@@ -265,6 +271,11 @@ export default function ProfilePage() {
             color="var(--color-success)"
           />
         </div>
+      </div>
+
+      {/* 업적 섹션 추가 */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <AchievementsSection userAchievements={userAchievements} />
       </div>
 
       {/* 새로고침 버튼 */}
