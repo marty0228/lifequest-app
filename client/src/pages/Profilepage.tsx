@@ -23,6 +23,11 @@ export default function ProfilePage() {
 
   const isMounted = useRef(true);
 
+   //Unity iframe 참조
+  const unityRef = useRef<HTMLIFrameElement>(null);
+  //전체화면 여부 상태
+  const [fullScreen, setFullScreen] = useState(false);
+
   async function load() {
     try {
       setRefreshing(true);
@@ -54,6 +59,42 @@ export default function ProfilePage() {
       setRefreshing(false);
     }
   }
+
+  function postToUnity(msg: any) {
+    unityRef.current?.contentWindow?.postMessage(msg, "*");
+  }
+    //프로필이 준비되면 XP/레벨을 Unity로 동기화
+  useEffect(() => {
+    if (!profile) return;
+    const { xp, level } = xpMetrics(profile.xp);
+    unityRef.current?.contentWindow?.postMessage(
+      { toUnity: true, type: "SYNC_XP_LEVEL", xp, level },
+      "*"
+    );
+  }, [profile]);
+
+   // [ADDED] Unity → React 메시지 수신 (Unity가 READY 알리면 한 번 더 싱크)
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const data = e.data;
+      if (!data || typeof data !== "object" || !data.fromUnity) return;
+
+      if (data.event === "READY" && profile) {
+        const { xp, level } = xpMetrics(profile.xp);
+        unityRef.current?.contentWindow?.postMessage(
+          { toUnity: true, type: "SYNC_XP_LEVEL", xp, level },
+          "*"
+        );
+      }
+
+      // 필요 시 Unity 상태 수신 처리
+      // if (data.event === "PLAYER_STATE") {
+      //   console.log("PLAYER_STATE from Unity:", data.payload);
+      // }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [profile]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -287,9 +328,113 @@ export default function ProfilePage() {
       >
         {refreshing ? "🔄 새로고침 중..." : "🔄 새로고침"}
       </button>
+{/* ───────── Unity 미리보기(Top+Middle만) ───────── */}
+      {!fullScreen && (
+        <div className="card">
+          <h3 style={{ margin: "0 0 12px" }}>
+            Game Preview — 프로필 XP/레벨과 동기화
+          </h3>
+
+          <div
+            style={{
+              position: "relative",
+              width: "100%",
+              height: 560, // TopInfo + MiddleCombat 높이에 맞춘 미리보기
+              background: "#000",
+              borderRadius: 12,
+              overflow: "hidden",
+            }}
+          >
+            <iframe
+              ref={unityRef}
+              src="/unity/index.html?compact=1"
+              title="LifeQuest Unity (Preview)"
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                display: "block",
+              }}
+              // 미리보기 로드되면 compact 모드 지시
+              onLoad={() => {
+                postToUnity({ toUnity: true, type: "SET_VIEW_MODE", mode: "compact" });
+                if (profile) {
+                  const { xp, level } = xpMetrics(profile.xp);
+                  postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level });
+                }
+              }}
+            />
+            {/* 전면 클릭 → 전체화면 */}
+            <button
+              onClick={() => setFullScreen(true)}
+              title="클릭하여 전체화면으로 전환"
+              style={{
+                position: "absolute",
+                inset: 0,
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ───────── Unity 전체화면 오버레이 ───────── */}
+      {fullScreen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            zIndex: 9999,
+            background: "#000",
+          }}
+        >
+          <iframe
+            ref={unityRef}
+            src="/unity/index.html"
+            title="LifeQuest Unity (Full)"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+              display: "block",
+            }}
+            onLoad={() => {
+              // 전체화면 들어오면 full 모드 지시
+              postToUnity({ toUnity: true, type: "SET_VIEW_MODE", mode: "full" });
+              if (profile) {
+                const { xp, level } = xpMetrics(profile.xp);
+                postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level });
+              }
+            }}
+          />
+          <button
+            onClick={() => setFullScreen(false)}
+            style={{
+              position: "absolute",
+              top: 20,
+              right: 20,
+              background: "rgba(255,255,255,0.9)",
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: "pointer",
+              border: "none",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+            }}
+          >
+            ❌ 나가기
+          </button>
+        </div>
+      )}
     </section>
   );
 }
+
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
