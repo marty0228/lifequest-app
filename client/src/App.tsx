@@ -3,7 +3,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
 import CalendarPage from "./pages/Calendar";
-import ProfilePage from "./pages/ProfilePage";
+import ProfilePage from "./pages/Profilepage";
 import GoalsPage from "./pages/Goals";
 import TimetablePage from './pages/TimetablePage';
 
