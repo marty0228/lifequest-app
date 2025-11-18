@@ -1,0 +1,15 @@
+.game-overlay {
+  opacity: 0;
+}
+
+.card:hover .game-overlay {
+  opacity: 1;
+}
+
+.game-preview-overlay {
+  opacity: 0;
+}
+
+.card:hover .game-preview-overlay {
+  opacity: 1;
+}

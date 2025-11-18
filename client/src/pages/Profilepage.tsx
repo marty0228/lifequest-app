@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabase";
 import { fetchMyProfile } from "../utils/profileDb";
 import type { Profile } from "../types";
@@ -16,17 +17,14 @@ function xpMetrics(xpRaw: number | null | undefined) {
 }
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const isMounted = useRef(true);
-
-   //Unity iframe 참조
   const unityRef = useRef<HTMLIFrameElement>(null);
-  //전체화면 여부 상태
-  const [fullScreen, setFullScreen] = useState(false);
 
   async function load() {
     try {
@@ -314,7 +312,141 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* 업적 섹션 추가 */}
+      {/* 게임 미리보기 카드 - 개선된 버전 */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {/* 헤더 */}
+        <div style={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: "20px 24px",
+          color: "white",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 20, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>🎮</span>
+              <span>게임 미리보기</span>
+            </h3>
+            <p style={{ margin: "6px 0 0", fontSize: 13, opacity: 0.9 }}>
+              전체화면으로 플레이하고 XP를 획득하세요!
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/game')}
+            style={{
+              background: "rgba(255,255,255,0.25)",
+              color: "white",
+              border: "2px solid rgba(255,255,255,0.4)",
+              padding: "10px 20px",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 14,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.35)";
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.25)";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            전체화면으로 플레이 →
+          </button>
+        </div>
+
+        {/* 게임 화면 미리보기 */}
+        <div 
+          style={{
+            position: "relative",
+            width: "100%",
+            height: 400,
+            background: "#000",
+            cursor: "pointer",
+            overflow: "hidden",
+          }}
+          onClick={() => navigate('/game')}
+        >
+          <iframe
+            ref={unityRef}
+            src="/unity/index.html?compact=1"
+            title="LifeQuest Unity (Preview)"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+              pointerEvents: "none",
+            }}
+            onLoad={() => {
+              unityRef.current?.contentWindow?.postMessage(
+                { toUnity: true, type: "SET_VIEW_MODE", mode: "compact" },
+                "*"
+              );
+              const { xp, level } = xpMetrics(profile.xp);
+              unityRef.current?.contentWindow?.postMessage(
+                { toUnity: true, type: "SYNC_XP_LEVEL", xp, level },
+                "*"
+              );
+            }}
+          />
+          
+          {/* 클릭 유도 오버레이 */}
+          <div 
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.6) 100%)",
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "center",
+              padding: 32,
+              opacity: 0,
+              transition: "opacity 0.3s",
+            }}
+            className="game-preview-overlay"
+          >
+            <div style={{
+              background: "rgba(255,255,255,0.95)",
+              padding: "16px 32px",
+              borderRadius: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+            }}>
+              <span style={{ fontSize: 32 }}>🎮</span>
+              <div>
+                <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#333" }}>
+                  클릭하여 게임 시작
+                </p>
+                <p style={{ fontSize: 12, margin: "4px 0 0", color: "#666" }}>
+                  전체화면에서 더 재미있게 즐기세요!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 게임 통계 푸터 */}
+        <div style={{
+          background: "#f8f9fa",
+          padding: "16px 24px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+          gap: 16,
+          borderTop: "1px solid #e0e0e0",
+        }}>
+          <GameStatBox icon="⚔️" label="몬스터 처치" value="0" />
+          <GameStatBox icon="💰" label="획득 골드" value="0" />
+          <GameStatBox icon="🎯" label="최고 콤보" value="0" />
+          <GameStatBox icon="⏱️" label="플레이 타임" value="0분" />
+        </div>
+      </div>
+
+      {/* 업적 섹션 */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <AchievementsSection userAchievements={userAchievements} />
       </div>
@@ -328,109 +460,6 @@ export default function ProfilePage() {
       >
         {refreshing ? "🔄 새로고침 중..." : "🔄 새로고침"}
       </button>
-{/* ───────── Unity 미리보기(Top+Middle만) ───────── */}
-      {!fullScreen && (
-        <div className="card">
-          <h3 style={{ margin: "0 0 12px" }}>
-            Game Preview — 프로필 XP/레벨과 동기화
-          </h3>
-
-          <div
-            style={{
-              position: "relative",
-              width: "100%",
-              height: 560, // TopInfo + MiddleCombat 높이에 맞춘 미리보기
-              background: "#000",
-              borderRadius: 12,
-              overflow: "hidden",
-            }}
-          >
-            <iframe
-              ref={unityRef}
-              src="/unity/index.html?compact=1"
-              title="LifeQuest Unity (Preview)"
-              style={{
-                width: "100%",
-                height: "100%",
-                border: "none",
-                display: "block",
-              }}
-              // 미리보기 로드되면 compact 모드 지시
-              onLoad={() => {
-                postToUnity({ toUnity: true, type: "SET_VIEW_MODE", mode: "compact" });
-                if (profile) {
-                  const { xp, level } = xpMetrics(profile.xp);
-                  postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level });
-                }
-              }}
-            />
-            {/* 전면 클릭 → 전체화면 */}
-            <button
-              onClick={() => setFullScreen(true)}
-              title="클릭하여 전체화면으로 전환"
-              style={{
-                position: "absolute",
-                inset: 0,
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ───────── Unity 전체화면 오버레이 ───────── */}
-      {fullScreen && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            zIndex: 9999,
-            background: "#000",
-          }}
-        >
-          <iframe
-            ref={unityRef}
-            src="/unity/index.html"
-            title="LifeQuest Unity (Full)"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-              display: "block",
-            }}
-            onLoad={() => {
-              // 전체화면 들어오면 full 모드 지시
-              postToUnity({ toUnity: true, type: "SET_VIEW_MODE", mode: "full" });
-              if (profile) {
-                const { xp, level } = xpMetrics(profile.xp);
-                postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level });
-              }
-            }}
-          />
-          <button
-            onClick={() => setFullScreen(false)}
-            style={{
-              position: "absolute",
-              top: 20,
-              right: 20,
-              background: "rgba(255,255,255,0.9)",
-              padding: "8px 16px",
-              borderRadius: 8,
-              fontWeight: 600,
-              cursor: "pointer",
-              border: "none",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-            }}
-          >
-            ❌ 나가기
-          </button>
-        </div>
-      )}
     </section>
   );
 }
@@ -475,6 +504,16 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
       <div style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
         {label}
       </div>
+    </div>
+  );
+}
+
+function GameStatBox({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 28, marginBottom: 6 }}>{icon}</div>
+      <div style={{ fontSize: 11, color: "#666", marginBottom: 3, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#333" }}>{value}</div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import CalendarPage from "./pages/Calendar";
 import ProfilePage from "./pages/Profilepage";
 import GoalsPage from "./pages/Goals";
 import TimetablePage from './pages/TimetablePage';
+import GamePage from './pages/GamePage';
 
 export default function App() {
   return (
@@ -27,6 +28,9 @@ export default function App() {
 
         <Route path="*" element={<div>Not Found</div>} />
       </Route>
+
+      {/* 게임 페이지 - Layout 없이 전체화면 */}
+      <Route path="/game" element={<GamePage />} />
     </Routes>
   );
 }
