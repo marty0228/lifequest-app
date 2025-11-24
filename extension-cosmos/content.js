@@ -95,67 +95,17 @@
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   /** =========================
-   * Supabase 업로드
+   * Background로 데이터 전송 (import 절대 사용 금지!)
    * ========================= */
-  async function uploadToSupabase(items) {
-    // 확장 폴더의 supabase.js 동적 임포트 (MV3 콘텐츠 스크립트 호환)
-    let supabase;
+  function sendToBackground(items) {
     try {
-      const mod = await import(chrome.runtime.getURL("supabase.js"));
-      supabase = mod.supabase;
+      chrome.runtime.sendMessage({
+        type: 'UPLOAD_TASKS',
+        payload: items
+      });
+      console.log('[ecampus] sent', items.length, 'items to background');
     } catch (e) {
-      console.warn("[ecampus] supabase import failed:", e);
-      return;
-    }
-
-    const now = new Date();
-    const weekMs = 7 * 24 * 60 * 60 * 1000;
-
-    for (const it of items) {
-      // 마감일 없는 항목은 스킵
-      if (!it.dueISO) continue;
-
-      const due = new Date(it.dueISO);
-      const remain = due.getTime() - now.getTime();
-
-      // 규칙:
-      // - assignment: 즉시 업로드
-      // - quiz: 7일 이내만 업로드
-      const shouldUpload =
-        it.kind === "assignment" ||
-        (it.kind === "quiz" && remain > 0 && remain <= weekMs);
-
-      if (!shouldUpload) continue;
-
-      const title = `[${it.course || ""}] ${it.title}`.trim();
-
-      // 중복 방지: 동일 title + dueDate 있으면 skip
-      const { count, error: chkErr } = await supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("title", title)
-        .eq("dueDate", it.dueISO);
-      if (chkErr) {
-        console.warn("[ecampus] exists check error:", chkErr);
-      }
-      if ((count ?? 0) > 0) {
-        console.log("[ecampus] skip duplicate:", title, it.dueISO);
-        continue;
-      }
-
-      const task = {
-        id: (crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-        title,
-        completed: false,
-        failed: false,
-        createdAt: new Date().toISOString(),
-        dueDate: it.dueISO
-      };
-
-      const { error } = await supabase.from("tasks").insert(task);
-      if (error) console.error("[ecampus] task insert failed:", error);
-      else console.log("[ecampus] task inserted:", task.title);
-      await sleep(80);
+      console.warn('[ecampus] send failed:', e);
     }
   }
 
@@ -207,25 +157,26 @@
               });
               await sleep(250);
             } catch (e) {
-              console.warn("[ecampus] detail fetch failed:", ln.url, e);
-              items.push({
-                kind: ln.kind, course: course.title, title: ln.title, url: ln.url,
-                dueDate: null, dueISO: null, statusText: ""
-              });
+              console.warn("[ecampus] detail failed:", ln.url, e);
             }
           }
 
           await sleep(200);
         } catch (e) {
-          console.warn("[ecampus] course fetch failed:", course.url, e);
+          console.warn("[ecampus] course failed:", course.url, e);
         }
       }
 
-      chrome.storage.local.set({ cosmosAssignments: items, cosmosCapturedAt: Date.now() });
-      console.log("[ecampus] scraped:", items, "from /dashboard.php");
-
-      // ✅ 스크랩 후 업로드
-      await uploadToSupabase(items);
+      // ✅ 스크랩 후 Background로 전송
+      if (items.length > 0) {
+        // ✅ chrome API 안전 체크 추가
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+          chrome.storage.local.set({ cosmosAssignments: items, cosmosCapturedAt: Date.now() });
+        }
+        console.log('[ecampus] scraped:', items, 'from /dashboard.php');
+        sendToBackground(items);
+      }
+      
       return items;
     }
 
@@ -258,19 +209,20 @@
           });
           await sleep(200);
         } catch (e) {
-          console.warn("[ecampus] detail fetch failed:", ln.url, e);
-          items.push({
-            kind: ln.kind, course: courseTitle, title: ln.title, url: ln.url,
-            dueDate: null, dueISO: null, statusText: ""
-          });
+          console.warn("[ecampus] detail failed:", ln.url, e);
         }
       }
 
-      chrome.storage.local.set({ cosmosAssignments: items, cosmosCapturedAt: Date.now() });
-      console.log("[ecampus] scraped:", items, "from /course/view.php");
-
-      // ✅ 스크랩 후 업로드
-      await uploadToSupabase(items);
+      // ✅ 스크랩 후 Background로 전송
+      if (items.length > 0) {
+        // ✅ chrome API 안전 체크 추가
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+          chrome.storage.local.set({ cosmosAssignments: items, cosmosCapturedAt: Date.now() });
+        }
+        console.log('[ecampus] scraped:', items, 'from /course/view.php');
+        sendToBackground(items);
+      }
+      
       return items;
     }
 
@@ -283,11 +235,12 @@
       const { dueDate, dueISO, statusText } = detailFromDoc(document, "assignment");
 
       const row = { kind: "assignment", course, title, url, dueDate, dueISO, statusText };
-      chrome.storage.local.set({ cosmosAssignments: [row], cosmosCapturedAt: Date.now() });
-      console.log("[ecampus] scraped:", [row], "from /mod/assign/view.php");
-
-      // ✅ 스크랩 후 업로드
-      await uploadToSupabase([row]);
+      // ✅ chrome API 안전 체크 추가
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.set({ cosmosAssignments: [row], cosmosCapturedAt: Date.now() });
+      }
+      console.log("[ecampus] scraped:", [row]);
+      sendToBackground([row]);
       return [row];
     }
 
@@ -300,16 +253,20 @@
       const { dueDate, dueISO, statusText } = detailFromDoc(document, "quiz");
 
       const row = { kind: "quiz", course, title, url, dueDate, dueISO, statusText };
-      chrome.storage.local.set({ cosmosAssignments: [row], cosmosCapturedAt: Date.now() });
-      console.log("[ecampus] scraped:", [row], "from /mod/quiz/view.php");
-
-      // ✅ 스크랩 후 업로드
-      await uploadToSupabase([row]);
+      // ✅ chrome API 안전 체크 추가
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.set({ cosmosAssignments: [row], cosmosCapturedAt: Date.now() });
+      }
+      console.log("[ecampus] scraped:", [row]);
+      sendToBackground([row]);
       return [row];
     }
 
     // 기타 페이지
-    chrome.storage.local.set({ cosmosAssignments: [], cosmosCapturedAt: Date.now() });
+    // ✅ chrome API 안전 체크 추가
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.local.set({ cosmosAssignments: [], cosmosCapturedAt: Date.now() });
+    }
     console.log("[ecampus] no data for:", location.pathname);
     return [];
   }

@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "LifeQuest Cosmos Sync",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "ecampus.sejong.ac.kr 에서 과제 정보를 추출합니다.",
   "icons": { "128": "icon128.png" },
   "permissions": ["storage", "alarms"],
   "host_permissions": [
     "https://ecampus.sejong.ac.kr/*",
-    "https://yztdblzrlvrjzxjvhsqh.supabase.co/*"
+    "https://yztdblzrlvrjzxjvhsqh.supabase.co/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -21,6 +23,12 @@
       "matches": ["https://ecampus.sejong.ac.kr/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://localhost:*/*", "http://127.0.0.1:*/*"],
+      "js": ["content-lifequest.js"],
+      "run_at": "document_end",
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [

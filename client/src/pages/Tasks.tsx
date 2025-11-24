@@ -44,6 +44,7 @@ export default function Tasks() {
   const [repeatMask, setRepeatMask] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // now: 남은시간 라벨/자정 스위치용
   const [now, setNow] = useState<Date>(new Date());
@@ -149,6 +150,19 @@ export default function Tasks() {
     }
   };
 
+  // Tasks 새로고침 함수
+  async function refreshTasks() {
+    try {
+      setRefreshing(true);
+      const taskList = await listMyTasks();
+      setItems(taskList);
+    } catch (e: any) {
+      setErr(e.message ?? "새로고침 실패");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   if (!authed) {
     return (
       <div className="fade-in" style={{ textAlign: "center", padding: 60 }}>
@@ -176,13 +190,50 @@ export default function Tasks() {
         color: "white",
         padding: "32px 24px",
       }}>
-        <h2 style={{ color: "white", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-          <span>✅</span>
-          <span>할 일 관리</span>
-        </h2>
-        <p style={{ color: "rgba(255, 255, 255, 0.9)", fontSize: 14 }}>
-          당신의 모든 할 일을 한 곳에서 관리하세요
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <h2 style={{ color: "white", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+              <span>✅</span>
+              <span>할 일 관리</span>
+            </h2>
+            <p style={{ color: "rgba(255, 255, 255, 0.9)", fontSize: 14 }}>
+              당신의 모든 할 일을 한 곳에서 관리하세요
+            </p>
+          </div>
+          
+          {/* Cosmos Extension 안내 + 새로고침 버튼 */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ 
+              fontSize: 12, 
+              color: "rgba(255,255,255,0.8)",
+              textAlign: "right",
+              maxWidth: 200,
+            }}>
+              <div>📚 Cosmos Extension으로</div>
+              <div>과제가 자동 추가됩니다</div>
+            </div>
+            <button
+              onClick={refreshTasks}
+              disabled={refreshing}
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                color: "white",
+                border: "2px solid rgba(255,255,255,0.4)",
+                padding: "10px 20px",
+                borderRadius: 8,
+                cursor: refreshing ? "not-allowed" : "pointer",
+                fontWeight: 600,
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span>🔄</span>
+              <span>{refreshing ? "새로고침 중..." : "새로고침"}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 입력 카드 */}

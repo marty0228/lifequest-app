@@ -1,94 +1,78 @@
 import { supabase } from "./supabase.js";
 
-// 확장 설치/시작 시 알람 설정
-chrome.runtime.onInstalled.addListener(() => scheduleMidnightSweep());
-chrome.runtime.onStartup.addListener(() => scheduleMidnightSweep());
+console.log('[bg] Background Script loaded');
 
-function scheduleMidnightSweep() {
-  const now = new Date();
-  const next = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1, // 내일
-    0, 5, 0, 0         // 00:05 (서버/클라이언트 시간차 완충)
-  );
-  chrome.alarms.create("midnightSweep", {
-    when: next.getTime(),
-    periodInMinutes: 24 * 60
-  });
-  console.log("[bg] alarm scheduled @", next.toString());
-}
-
-// 알람 핸들러
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== "midnightSweep") return;
-  try {
-    await promotePendingQuizzes();
-  } catch (e) {
-    console.error("[bg] promote error:", e);
+// 메시지 리스너
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'UPLOAD_TASKS') {
+    handleUploadTasks(message.payload)
+      .then(() => sendResponse({ success: true }))
+      .catch(err => {
+        console.error('[bg] upload failed:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+    return true;
   }
 });
 
-// 수동 테스트용: DevTools 콘솔에서 호출 가능
-globalThis.promotePendingQuizzes = promotePendingQuizzes;
-
-async function promotePendingQuizzes() {
-  const { pendingQuizzes = [] } = await chrome.storage.local.get(["pendingQuizzes"]);
-  if (!pendingQuizzes.length) {
-    console.log("[bg] no pending quizzes");
+async function handleUploadTasks(items) {
+  console.log('[bg] handleUploadTasks called with items:', items);
+  
+  if (!items || !items.length) {
+    console.log('[bg] no items to upload');
     return;
   }
 
-  const now = new Date();
-  const weekMs = 7 * 24 * 60 * 60 * 1000;
-  const keep = [];
-  const promote = [];
-
-  for (const q of pendingQuizzes) {
-    if (!q.dueISO) continue;
-    const remain = new Date(q.dueISO).getTime() - now.getTime();
-    if (remain > 0 && remain <= weekMs) promote.push(q);
-    else keep.push(q);
-  }
-
-  // 승격 실행
-  for (const item of promote) {
-    const title = `[${item.course}] ${item.title}`;
-    if (await existsTask(title, item.dueISO)) {
-      console.log("[bg] dup skip:", title);
+  for (const it of items) {
+    // 과제만 업로드 (퀴즈 제외)
+    if (it.kind !== 'assignment') {
+      console.log('[bg] skip quiz:', it.title);
       continue;
     }
 
+    const title = `[${it.course || ""}] ${it.title}`.trim();
+
+    // 중복 체크
+    const { data: existing } = await supabase
+      .from("tasks")
+      .select("id")
+      .eq("title", title)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log('[bg] skip duplicate:', title);
+      continue;
+    }
+
+    // Task 추가
     const task = {
-      id: crypto.randomUUID(),
       title,
-      completed: false,
-      failed: false,
-      createdAt: new Date().toISOString(),
-      dueDate: item.dueISO
+      done: false,
+      due_date: it.dueDate,  // YYYY-MM-DD
     };
 
-    const { error } = await supabase.from("tasks").insert(task);
-    if (error) console.error("[bg] insert fail:", error);
-    else console.log("[bg] promoted:", task.title);
+    console.log('[bg] inserting task:', task);
+
+    const { data, error } = await supabase.from("tasks").insert(task).select();
+    
+    if (error) {
+      console.error('[bg] task insert failed:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        task: task
+      });
+    } else {
+      console.log('[bg] ✅ task inserted:', data);
+    }
+
+    await sleep(100);
   }
 
-  // 남길 목록으로 갱신
-  await chrome.storage.local.set({ pendingQuizzes: keep });
-  console.log(`[bg] sweep done. promoted=${promote.length}, keep=${keep.length}`);
+  console.log('[bg] ✅ All tasks processed');
 }
 
-async function existsTask(title, dueISO) {
-  const q = supabase
-    .from("tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("title", title);
-
-  if (dueISO) q.eq("dueDate", dueISO);
-  const { count, error } = await q;
-  if (error) {
-    console.warn("[bg] exists check error:", error);
-    return false;
-  }
-  return (count ?? 0) > 0;
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
 }

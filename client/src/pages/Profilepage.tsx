@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabase";
 import { fetchMyProfile } from "../utils/profileDb";
-import type { Profile } from "../types";
+import { listMyTasks } from "../utils/tasksDb";
+import type { Profile, TaskRow } from "../types";
 import LogoutButton from "../components/LogoutButton";
 import AchievementsSection from "../components/AchievementsSection";
 import { calculateAchievementProgress, checkAchievements } from "../utils/achievementUtils";
@@ -22,6 +23,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
 
   const isMounted = useRef(true);
   const unityRef = useRef<HTMLIFrameElement>(null);
@@ -43,10 +45,16 @@ export default function ProfilePage() {
         return;
       }
 
-      const p = await fetchMyProfile(user.id);
+      // 프로필과 Tasks 동시 로드
+      const [p, taskList] = await Promise.all([
+        fetchMyProfile(user.id),
+        listMyTasks(),
+      ]);
+
       if (!isMounted.current) return;
 
       setProfile(p);
+      setTasks(taskList);
       setErr(null);
     } catch (e: any) {
       if (!isMounted.current) return;
@@ -146,10 +154,20 @@ export default function ProfilePage() {
 
   const { xp, level, xpInLevel, progress } = xpMetrics(profile.xp);
 
-  // 업적 계산 (임시 퀘스트 데이터 - 실제로는 데이터베이스에서 가져와야 함)
-  const dummyQuests: any[] = [];
-  const achievementProgress = calculateAchievementProgress(dummyQuests, level);
+  // [수정] Tasks를 Quest 형식으로 변환
+  const quests = tasks.map(task => ({
+    id: task.id,
+    title: task.title,
+    category: task.title.includes('[') ? '학업' : '기타',  // [과목명] 형식이면 학업
+    completed: task.done,
+  }));
+
+  const achievementProgress = calculateAchievementProgress(quests, level);
   const userAchievements = checkAchievements(achievementProgress);
+
+  const completedQuests = quests.filter(q => q.completed).length;
+  const totalQuests = quests.length;
+  const questCompletionRate = totalQuests > 0 ? (completedQuests / totalQuests) * 100 : 0;
 
   return (
     <section className="fade-in" style={{ display: "grid", gap: 20 }}>
@@ -280,7 +298,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* 통계 카드 */}
+      {/* 통계 카드 - 퀘스트 정보 추가 */}
       <div className="card">
         <h3 style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
           <span>📊</span>
@@ -304,10 +322,16 @@ export default function ProfilePage() {
             color="var(--color-warning)"
           />
           <StatCard 
-            icon="📈" 
-            label="진행률" 
-            value={`${progress}%`}
+            icon="✅" 
+            label="완료 퀘스트" 
+            value={String(completedQuests)}
             color="var(--color-success)"
+          />
+          <StatCard 
+            icon="📈" 
+            label="완료율" 
+            value={`${questCompletionRate.toFixed(0)}%`}
+            color="var(--color-info)"
           />
         </div>
       </div>

@@ -70,6 +70,24 @@ export default function AuthPanel() {
       const { data, error } = await call;
       if (error) throw error;
 
+      // ✅ 로그인 성공 시 Extension에 userId 전달 (강화)
+      if (mode === "signin" && data.user) {
+        const userId = data.user.id;
+        
+        // 1초 후 다시 한번 전송 (확실하게)
+        const sendUserId = () => {
+          window.postMessage({
+            type: 'LIFEQUEST_USER_ID',
+            userId: userId,
+          }, window.location.origin);
+          console.log('[Auth] ✅ userId sent via postMessage:', userId);
+        };
+        
+        sendUserId();
+        setTimeout(sendUserId, 1000);
+        setTimeout(sendUserId, 2000);
+      }
+
       setMsg(
         mode === "signin"
           ? `로그인 성공: ${data.user?.email ?? ""}`
