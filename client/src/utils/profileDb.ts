@@ -17,9 +17,9 @@ function mapRowToProfile(row: any): Profile {
   }
   return {
     id: row.user_id ?? row.id ?? "",
-    username: null,
-    displayName: null,
-    avatarUrl: null,
+    username: row.username ?? null,
+    displayName: row.display_name ?? null,
+    avatarUrl: row.avatar_url ?? null,
     xp: typeof row.xp === "number" ? row.xp : row.xp ?? null,
     level: typeof row.level === "number" ? row.level : row.level ?? null,
     createdAt: row.created_at ?? null,
@@ -31,7 +31,7 @@ function mapRowToProfile(row: any): Profile {
 export async function fetchMyProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("user_id, xp, level, updated_at") // 테이블에 있는 컬럼만!
+    .select("user_id, username, display_name, avatar_url, xp, level, created_at, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -42,25 +42,28 @@ export async function fetchMyProfile(userId: string): Promise<Profile | null> {
 
 /** 내 프로필 upsert (user_id 충돌 기준) */
 export async function upsertMyProfile(input: {
-  id: string; // 앱에선 id로 부르되, DB에는 user_id로 저장
+  id: string;
   xp?: number | null;
   level?: number | null;
-  // 아래 3개는 현재 테이블에 없으므로 무시되지만 타입은 유지
   username?: string | null;
   displayName?: string | null;
   avatarUrl?: string | null;
 }): Promise<Profile> {
   const payload: any = {
     user_id: input.id,
-    xp: input.xp === undefined ? undefined : input.xp,
-    level: input.level === undefined ? undefined : input.level,
     updated_at: new Date().toISOString(),
   };
+
+  if (input.xp !== undefined) payload.xp = input.xp;
+  if (input.level !== undefined) payload.level = input.level;
+  if (input.username !== undefined) payload.username = input.username;
+  if (input.displayName !== undefined) payload.display_name = input.displayName;
+  if (input.avatarUrl !== undefined) payload.avatar_url = input.avatarUrl;
 
   const { data, error } = await supabase
     .from("profiles")
     .upsert(payload, { onConflict: "user_id" })
-    .select("user_id, xp, level, updated_at")
+    .select("user_id, username, display_name, avatar_url, xp, level, created_at, updated_at")
     .single();
 
   if (error) throw error;

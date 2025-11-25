@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabase";
-import { fetchMyProfile } from "../utils/profileDb";
+import { fetchMyProfile, upsertMyProfile } from "../utils/profileDb";
 import { listMyTasks } from "../utils/tasksDb";
 import type { Profile, TaskRow } from "../types";
 import LogoutButton from "../components/LogoutButton";
@@ -24,6 +24,12 @@ export default function ProfilePage() {
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [editMode, setEditMode] = useState(false);
+  const [editUsername, setEditUsername] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const isMounted = useRef(true);
   const unityRef = useRef<HTMLIFrameElement>(null);
@@ -53,8 +59,18 @@ export default function ProfilePage() {
 
       if (!isMounted.current) return;
 
+      // ✅ null 체크 추가
+      if (!p) {
+        setErr("프로필을 찾을 수 없습니다.");
+        setProfile(null);
+        return;
+      }
+
       setProfile(p);
       setTasks(taskList);
+      setEditUsername(p.username ?? "");
+      setEditDisplayName(p.displayName ?? "");
+      setEditAvatarUrl(p.avatarUrl ?? "");
       setErr(null);
     } catch (e: any) {
       if (!isMounted.current) return;
@@ -112,6 +128,61 @@ export default function ProfilePage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleSaveProfile() {
+    if (!profile) return;
+    
+    try {
+      setSaving(true);
+      const updated = await upsertMyProfile({
+        id: profile.id,
+        username: editUsername.trim() || null,
+        displayName: editDisplayName.trim() || null,
+        avatarUrl: editAvatarUrl.trim() || null,
+      });
+      setProfile(updated);
+      setEditMode(false);
+    } catch (e: any) {
+      setErr(e?.message ?? "프로필 저장 실패");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!profile || !e.target.files || e.target.files.length === 0) return;
+    
+    const file = e.target.files[0];
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
+    
+    try {
+      setUploading(true);
+      
+      // Supabase Storage에 업로드
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      // Public URL 가져오기
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      // 프로필에 URL 저장
+      setEditAvatarUrl(publicUrl);
+      
+    } catch (e: any) {
+      setErr(e?.message ?? "이미지 업로드 실패");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -171,7 +242,7 @@ export default function ProfilePage() {
 
   return (
     <section className="fade-in" style={{ display: "grid", gap: 20 }}>
-      {/* 헤더 카드 - 그라데이션 */}
+      {/* 헤더 카드 */}
       <div className="card" style={{
         background: "linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
         color: "white",
@@ -234,8 +305,172 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
-            <LogoutButton />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => {
+                  if (editMode) {
+                    setEditUsername(profile.username ?? "");
+                    setEditDisplayName(profile.displayName ?? "");
+                    setEditAvatarUrl(profile.avatarUrl ?? "");
+                  }
+                  setEditMode(!editMode);
+                }}
+                style={{
+                  background: "rgba(255,255,255,0.2)",
+                  color: "white",
+                  border: "2px solid rgba(255,255,255,0.4)",
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 13,
+                }}
+              >
+                {editMode ? "✖️ 취소" : "✏️ 프로필 수정"}
+              </button>
+              <LogoutButton />
+            </div>
           </div>
+
+          {/* 프로필 수정 폼 */}
+          {editMode && (
+            <div style={{
+              background: "rgba(255, 255, 255, 0.15)",
+              borderRadius: 12,
+              padding: 20,
+              marginBottom: 20,
+              backdropFilter: "blur(10px)",
+            }}>
+              <h3 style={{ marginBottom: 16, fontSize: 16 }}>프로필 정보 수정</h3>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 13, marginBottom: 6, fontWeight: 600 }}>
+                    프로필 사진
+                  </label>
+                  
+                  {/* 파일 업로드 버튼 */}
+                  <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                    <label style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      background: "rgba(255,255,255,0.9)",
+                      color: "#333",
+                      cursor: uploading ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                    }}>
+                      <span>{uploading ? "⏳" : "📁"}</span>
+                      <span>{uploading ? "업로드 중..." : "컴퓨터에서 선택"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadAvatar}
+                        disabled={uploading}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+                  </div>
+
+                  {/* URL 직접 입력 (기존 기능 유지) */}
+                  <input
+                    type="url"
+                    value={editAvatarUrl}
+                    onChange={(e) => setEditAvatarUrl(e.target.value)}
+                    placeholder="https://example.com/avatar.jpg"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      background: "rgba(255,255,255,0.9)",
+                      color: "#333",
+                    }}
+                  />
+                  
+                  {/* 미리보기 */}
+                  {editAvatarUrl && (
+                    <div style={{ marginTop: 10 }}>
+                      <img
+                        src={editAvatarUrl}
+                        alt="미리보기"
+                        style={{
+                          width: 100,
+                          height: 100,
+                          objectFit: "cover",
+                          borderRadius: "50%",
+                          border: "3px solid rgba(255,255,255,0.3)",
+                        }}
+                      />
+                    </div>
+                  )}
+                  
+                  <p style={{ fontSize: 11, marginTop: 4, opacity: 0.8 }}>
+                    💡 Tip: 컴퓨터에서 이미지를 선택하거나 URL을 직접 입력하세요
+                  </p>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 13, marginBottom: 6, fontWeight: 600 }}>
+                    사용자 이름 (ID)
+                  </label>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    placeholder="username123"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      background: "rgba(255,255,255,0.9)",
+                      color: "#333",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 13, marginBottom: 6, fontWeight: 600 }}>
+                    표시 이름
+                  </label>
+                  <input
+                    type="text"
+                    value={editDisplayName}
+                    onChange={(e) => setEditDisplayName(e.target.value)}
+                    placeholder="홍길동"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      background: "rgba(255,255,255,0.9)",
+                      color: "#333",
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  style={{
+                    background: "rgba(16, 185, 129, 1)",
+                    color: "white",
+                    border: "none",
+                    padding: "12px 24px",
+                    borderRadius: 8,
+                    cursor: saving ? "not-allowed" : "pointer",
+                    fontWeight: 600,
+                    fontSize: 14,
+                    marginTop: 8,
+                  }}
+                >
+                  {saving ? "저장 중..." : "✅ 저장하기"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* XP 프로그레스 */}
           <div style={{
