@@ -85,12 +85,18 @@ export default function ProfilePage() {
   function postToUnity(msg: any) {
     unityRef.current?.contentWindow?.postMessage(msg, "*");
   }
-    //프로필이 준비되면 XP/레벨을 Unity로 동기화
+    //프로필이 준비되면 XP/레벨/이름을 Unity로 동기화
   useEffect(() => {
     if (!profile) return;
+
     const { xp, level } = xpMetrics(profile.xp);
+    const name =
+      profile.displayName?.trim() ||
+      profile.username?.trim() ||
+      "Player";
+
     unityRef.current?.contentWindow?.postMessage(
-      { toUnity: true, type: "SYNC_XP_LEVEL", xp, level },
+      { toUnity: true, type: "SYNC_XP_LEVEL", xp, level, name },
       "*"
     );
   }, [profile]);
@@ -103,17 +109,36 @@ export default function ProfilePage() {
 
       if (data.event === "READY" && profile) {
         const { xp, level } = xpMetrics(profile.xp);
+        const name =
+          profile.displayName?.trim() ||
+          profile.username?.trim() ||
+          "Player";
+
         unityRef.current?.contentWindow?.postMessage(
-          { toUnity: true, type: "SYNC_XP_LEVEL", xp, level },
+          { toUnity: true, type: "SYNC_XP_LEVEL", xp, level, name },
           "*"
         );
+
+        // 🔹 저장된 게임 상태가 있으면 Unity에 로드 요청
+        const saved = localStorage.getItem("lifequest.gameState.v1");
+        if (saved) {
+          unityRef.current?.contentWindow?.postMessage(
+            { toUnity: true, type: "LOAD_GAME_STATE", json: saved },
+            "*"
+          );
+        }
       }
 
-      // 필요 시 Unity 상태 수신 처리
-      // if (data.event === "PLAYER_STATE") {
-      //   console.log("PLAYER_STATE from Unity:", data.payload);
-      // }
+      // 🔹 Unity → React : GAME_STATE 수신 시 localStorage에 저장
+      if (data.event === "GAME_STATE" && typeof data.json === "string") {
+        try {
+          localStorage.setItem("lifequest.gameState.v1", data.json);
+        } catch (err) {
+          console.error("게임 상태 저장 실패", err);
+        }
+      }
     };
+
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [profile]);
@@ -644,11 +669,24 @@ export default function ProfilePage() {
                 { toUnity: true, type: "SET_VIEW_MODE", mode: "compact" },
                 "*"
               );
-              const { xp, level } = xpMetrics(profile.xp);
-              unityRef.current?.contentWindow?.postMessage(
-                { toUnity: true, type: "SYNC_XP_LEVEL", xp, level },
-                "*"
-              );
+                const { xp, level } = xpMetrics(profile.xp);
+                const name =
+                  profile.displayName?.trim() ||
+                  profile.username?.trim() ||
+                  "Player";
+
+                unityRef.current?.contentWindow?.postMessage(
+                  { toUnity: true, type: "SYNC_XP_LEVEL", xp, level, name },
+                  "*"
+                );
+              
+              const saved = localStorage.getItem("lifequest.gameState.v1");
+              if (saved) {
+                unityRef.current?.contentWindow?.postMessage(
+                  { toUnity: true, type: "LOAD_GAME_STATE", json: saved },
+                  "*"
+                );
+              }
             }}
           />
           

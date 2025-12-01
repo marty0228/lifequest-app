@@ -68,6 +68,15 @@ export default function GamePage() {
         case "COMBAT_STATS":
           setGameStats(data.stats);
           break;
+        case "GAME_STATE":
+          if (typeof data.json === "string") {
+            try {
+              localStorage.setItem("lifequest.gameState.v1", data.json);
+            } catch (err) {
+              console.error("게임 상태 저장 실패", err);
+            }
+          }
+          break;
       }
     };
     
@@ -75,11 +84,26 @@ export default function GamePage() {
     return () => window.removeEventListener("message", onMsg);
   }, [profile]);
 
-  function syncToUnity() {
-    if (!profile) return;
-    const { xp, level } = xpMetrics(profile.xp);
-    postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level });
+function syncToUnity() {
+  if (!profile) return;
+  const { xp, level } = xpMetrics(profile.xp);
+
+  const name =
+    profile.displayName?.trim() ||
+    profile.username?.trim() ||
+    "Player";
+
+    // 1) 프로필 정보 먼저
+    postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level, name });
+
+    // 2) full 모드 설정
     postToUnity({ toUnity: true, type: "SET_VIEW_MODE", mode: "full" });
+
+    // 3) 저장된 게임 상태 로드
+    const saved = localStorage.getItem("lifequest.gameState.v1");
+    if (saved) {
+      postToUnity({ toUnity: true, type: "LOAD_GAME_STATE", json: saved });
+    }
   }
 
   async function handleXPGain(amount: number) {
@@ -99,7 +123,18 @@ export default function GamePage() {
       
       // Unity에 업데이트된 XP/레벨 동기화
       const { level } = xpMetrics(newXP);
-      postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp: newXP, level });
+      const name =
+      profile.displayName?.trim() ||
+      profile.username?.trim() ||
+      "Player";
+
+    postToUnity({
+      toUnity: true,
+      type: "SYNC_XP_LEVEL",
+      xp: newXP,
+      level,
+      name,
+    });
       
       // 알림 표시 (나중에 toast 라이브러리로 교체)
       console.log(`🎮 게임에서 ${amount} XP 획득!`);

@@ -1,16 +1,11 @@
 <!DOCTYPE html>
 <html lang="en-us">
   <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | My project (5)</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico" />
-    <link rel="stylesheet" href="TemplateData/style.css" />
-    <!-- 스크롤바 제거 & 컨테이너 잘림 방지 -->
-    <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; }
-      #unity-container { overflow: hidden; }
-    </style>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -30,7 +25,8 @@
     </div>
 
     <script>
-      // ----- 배너 공용 -----
+      var canvas = document.querySelector("#unity-canvas");
+
       function unityShowBanner(msg, type) {
         var warningBanner = document.querySelector("#unity-warning");
         function updateBannerVisibility() {
@@ -42,93 +38,127 @@
         if (type == "error") div.style = "background: red; padding: 10px;";
         else {
           if (type == "warning") div.style = "background: yellow; padding: 10px;";
-          setTimeout(function () { warningBanner.removeChild(div); updateBannerVisibility(); }, 5000);
+          setTimeout(function () {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
         }
         updateBannerVisibility();
       }
 
-      // ===== Compact 모드 결정 (Top+Middle만: 1920x960) =====
-      const params = new URLSearchParams(location.search);
-      const COMPACT = params.get("compact") === "1";
-      const UNITY_W = 1920;
-      const UNITY_H_FULL = 1080;
-      const UNITY_H_COMPACT = 960;  // Bottom(120px) 제외
-
-      var canvas = document.querySelector("#unity-canvas");
-      var container = document.querySelector("#unity-container");
-      var footer = document.querySelector("#unity-footer");
-
-      // 기본 데스크톱 스타일
-      const targetH = COMPACT ? UNITY_H_COMPACT : UNITY_H_FULL;
-      container.style.width = UNITY_W + "px";
-      container.style.height = targetH + "px";
-      canvas.style.width = UNITY_W + "px";
-      canvas.style.height = targetH + "px";
-      // 필요 시 푸터 숨김(공간 차지 방지)
-      if (COMPACT) footer.style.display = "none";
-
-      // 모바일은 필요시 따로 처리(지금은 데스크톱 미리보기 용도라 생략 가능)
-      // html/body overflow hidden으로 iframe 내 스크롤 제거
-
-      document.querySelector("#unity-loading-bar").style.display = "block";
-
-      // ----- Unity 빌드 경로 (한국어 파일명 유지) -----
       var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/새 폴더.loader.js";
+      var loaderUrl = buildUrl + "/unity.loader.js";
       var config = {
         arguments: [],
-        dataUrl: buildUrl + "/새 폴더.data.unityweb",
-        frameworkUrl: buildUrl + "/새 폴더.framework.js.unityweb",
-        codeUrl: buildUrl + "/새 폴더.wasm.unityweb",
+        dataUrl: buildUrl + "/unity.data.unityweb",
+        frameworkUrl: buildUrl + "/unity.framework.js.unityweb",
+        codeUrl: buildUrl + "/unity.wasm.unityweb",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "DefaultCompany",
         productName: "My project (5)",
         productVersion: "1.0",
         showBanner: unityShowBanner,
-        // 캔버스 크기와 렌더 타겟 동기화(기본 true) → 위에서 height=960이면 1920x960로 렌더됨
-        // matchWebGLToCanvasSize: true,
       };
 
-      // ===== React 브리지(필요시 유지) =====
-      function setupParentMessageListener() {
-        window.addEventListener("message", function (e) {
-          var msg = e.data;
-          if (!msg || !msg.toUnity || !window.unityInstance) return;
-          var GO = "Bridge";
-          switch (msg.type) {
-            case "SYNC_XP_LEVEL":
-              window.unityInstance.SendMessage(GO, "OnSyncXpLevel", JSON.stringify({ level: msg.level, xp: msg.xp }));
-              break;
-            case "ADD_SP":
-              window.unityInstance.SendMessage(GO, "OnAddSp", String(msg.amount));
-              break;
-            case "ADD_XP":
-              window.unityInstance.SendMessage(GO, "OnAddXp", String(msg.amount));
-              break;
-          }
-        });
-      }
-      function notifyParentReady() {
-        window.parent.postMessage({ fromUnity: true, event: "READY", payload: { ok: true } }, "*");
+      // 필요하면 나중에 진행도 저장용으로 이거도 켤 수 있음
+      // config.autoSyncPersistentDataPath = true;
+
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        var meta = document.createElement("meta");
+        meta.name = "viewport";
+        meta.content =
+          "width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes";
+        document.getElementsByTagName("head")[0].appendChild(meta);
+        document.querySelector("#unity-container").className = "unity-mobile";
+        canvas.className = "unity-mobile";
+      } else {
+        canvas.style.width = "1920px";
+        canvas.style.height = "1080px";
       }
 
-      // ----- 로더 -----
+      document.querySelector("#unity-loading-bar").style.display = "block";
+
       var script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {
         createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
+          document.querySelector("#unity-progress-bar-full").style.width =
+            100 * progress + "%";
         })
-          .then((instance) => {
-            window.unityInstance = instance;
+          .then((unityInstance) => {
+            // ⭐ React 브릿지에서 쓸 수 있도록 전역에 보관
+            window.unityInstance = unityInstance;
+
             document.querySelector("#unity-loading-bar").style.display = "none";
-            document.querySelector("#unity-fullscreen-button").onclick = () => instance.SetFullscreen(1);
-            setupParentMessageListener();
-            notifyParentReady();
+            document.querySelector("#unity-fullscreen-button").onclick = () => {
+              unityInstance.SetFullscreen(1);
+            };
           })
-          .catch((message) => alert(message));
+          .catch((message) => {
+            alert(message);
+          });
       };
       document.body.appendChild(script);
+    </script>
+
+    <!-- 🔻 React ↔ Unity 브릿지 스크립트 -->
+    <script>
+      function sendToUnity(method, arg) {
+        if (window.unityInstance && window.unityInstance.SendMessage) {
+          window.unityInstance.SendMessage("Bridge", method, arg);
+        } else {
+          // Unity가 아직 완전히 안 켜졌을 때 들어오는 메시지는 그냥 로그만 남김
+          console.log("Unity not ready yet, skip", method);
+        }
+      }
+
+      // React → Unity
+      window.addEventListener("message", function (e) {
+        var data = e.data;
+        if (!data || typeof data !== "object") return;
+        if (!data.toUnity) return;
+
+        if (data.type === "SYNC_XP_LEVEL") {
+          var payload = {
+            name: data.name || "Player",
+            level: data.level || 1,
+            xp: data.xp || 0,
+          };
+          sendToUnity("OnSyncXpLevel", JSON.stringify(payload));
+        }
+
+        if (data.type === "SET_VIEW_MODE") {
+          // compact 모드 같은 거 쓰고 싶으면 여기서 처리
+          window.gameViewMode = data.mode;
+        }
+      });
+
+      // Unity → React : READY 알림
+      window.NotifyParentReady = function () {
+        if (window.parent) {
+          window.parent.postMessage(
+            { fromUnity: true, event: "READY" },
+            "*"
+          );
+        }
+      };
+
+        function OnGameStateSync(json) {
+          try {
+            if (window.parent) {
+              window.parent.postMessage(
+                {
+                  fromUnity: true,
+                  event: "GAME_STATE",
+                  json: json   // 문자열 그대로 넘겨주자 (파싱은 React에서)
+                },
+                "*"
+              );
+            }
+          } catch (e) {
+            console.error("OnGameStateSync error", e);
+          }
+        }
     </script>
   </body>
 </html>
