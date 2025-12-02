@@ -647,7 +647,7 @@ export default function ProfilePage() {
           style={{
             position: "relative",
             width: "100%",
-            height: 400,
+            height: 600, // ✅ 원래대로 400px
             background: "#000",
             cursor: "pointer",
             overflow: "hidden",
@@ -660,7 +660,7 @@ export default function ProfilePage() {
             title="LifeQuest Unity (Preview)"
             style={{
               width: "100%",
-              height: "100%",
+              height: "100%", // ✅ 원래대로 100%
               border: "none",
               pointerEvents: "none",
             }}

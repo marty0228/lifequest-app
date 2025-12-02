@@ -84,26 +84,26 @@ export default function GamePage() {
     return () => window.removeEventListener("message", onMsg);
   }, [profile]);
 
-function syncToUnity() {
-  if (!profile) return;
-  const { xp, level } = xpMetrics(profile.xp);
+  function syncToUnity() {
+    if (!profile) return;
+    const { xp, level } = xpMetrics(profile.xp);
 
-  const name =
-    profile.displayName?.trim() ||
-    profile.username?.trim() ||
-    "Player";
+    const name =
+      profile.displayName?.trim() ||
+      profile.username?.trim() ||
+      "Player";
 
-    // 1) 프로필 정보 먼저
-    postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level, name });
+      // 1) 프로필 정보 먼저
+      postToUnity({ toUnity: true, type: "SYNC_XP_LEVEL", xp, level, name });
 
-    // 2) full 모드 설정
-    postToUnity({ toUnity: true, type: "SET_VIEW_MODE", mode: "full" });
+      // 2) full 모드 설정
+      postToUnity({ toUnity: true, type: "SET_VIEW_MODE", mode: "full" });
 
-    // 3) 저장된 게임 상태 로드
-    const saved = localStorage.getItem("lifequest.gameState.v1");
-    if (saved) {
-      postToUnity({ toUnity: true, type: "LOAD_GAME_STATE", json: saved });
-    }
+      // 3) 저장된 게임 상태 로드
+      const saved = localStorage.getItem("lifequest.gameState.v1");
+      if (saved) {
+        postToUnity({ toUnity: true, type: "LOAD_GAME_STATE", json: saved });
+      }
   }
 
   async function handleXPGain(amount: number) {
@@ -161,116 +161,53 @@ function syncToUnity() {
     );
   }
 
-  const { xp, level } = profile ? xpMetrics(profile.xp) : { xp: 0, level: 1 };
-
   return (
-    <div style={{ 
-      height: "100vh", 
-      display: "flex", 
-      flexDirection: "column",
+    <div style={{
+      position: "fixed",
+      inset: 0,
       background: "#000",
-      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
     }}>
-      {/* 상단 HUD */}
+      {/* 상단 헤더 */}
       <div style={{
-        background: "rgba(0,0,0,0.9)",
-        padding: "12px 20px",
+        background: "linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
+        color: "white",
+        padding: "16px 24px",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        borderBottom: "2px solid #333",
-        backdropFilter: "blur(10px)",
+        zIndex: 10,
       }}>
+        <h2 style={{ margin: 0, fontSize: 20 }}>🎮 LifeQuest Game</h2>
         <button
           onClick={() => navigate('/me')}
           style={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            background: "rgba(255,255,255,0.2)",
             color: "white",
-            border: "none",
-            padding: "10px 20px",
+            border: "2px solid rgba(255,255,255,0.4)",
+            padding: "8px 16px",
             borderRadius: 8,
             cursor: "pointer",
             fontWeight: 600,
             fontSize: 14,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            transition: "transform 0.2s",
           }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-2px)"}
-          onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
         >
-          ← 프로필로
+          ← 프로필로 돌아가기
         </button>
-        
-        {/* 플레이어 정보 */}
-        <div style={{ 
-          display: "flex", 
-          gap: 32, 
-          color: "white",
-          alignItems: "center",
-        }}>
-          <div style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: 8,
-            background: "rgba(255,255,255,0.1)",
-            padding: "8px 16px",
-            borderRadius: 8,
-          }}>
-            <span style={{ fontSize: 20 }}>🏆</span>
-            <div>
-              <div style={{ fontSize: 11, opacity: 0.7 }}>레벨</div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{level}</div>
-            </div>
-          </div>
-          
-          <div style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: 8,
-            background: "rgba(255,255,255,0.1)",
-            padding: "8px 16px",
-            borderRadius: 8,
-          }}>
-            <span style={{ fontSize: 20 }}>⭐</span>
-            <div>
-              <div style={{ fontSize: 11, opacity: 0.7 }}>XP</div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{xp}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* 게임 통계 */}
-        <div style={{ display: "flex", gap: 24, color: "white", fontSize: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span>⚔️</span>
-            <span>{gameStats.monstersDefeated}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span>💥</span>
-            <span>{gameStats.totalDamage}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span>⏱️</span>
-            <span>{Math.floor(gameStats.playtime / 60)}분</span>
-          </div>
-        </div>
       </div>
 
-      {/* Unity 게임 */}
-      <div style={{ flex: 1, position: "relative" }}>
+      {/* Unity 게임 화면 */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <iframe
           ref={unityRef}
           src="/unity/index.html"
-          title="LifeQuest Unity Game"
+          title="LifeQuest Unity"
           style={{
             width: "100%",
             height: "100%",
             border: "none",
-            display: "block",
           }}
-          onLoad={syncToUnity}
         />
       </div>
     </div>
